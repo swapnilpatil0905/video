@@ -1,0 +1,9 @@
+model_id: diarizen-wavlm-large
+name: DiariZen WavLM-large (s80, md) speaker diarization
+tasks: [diarization]
+status: selected
+repository: https://github.com/BUTSpeechFIT/DiariZen
+weights: {hf_repo: BUT-FIT/diarizen-wavlm-large-s80-md}
+licence: {code: MIT, weights: CC-BY-NC-4.0, personal_use: "yes", commercial_use: "no", notes: Verify on the model card, sources: [https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda], min_vram_gb: 4}

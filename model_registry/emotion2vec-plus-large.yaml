@@ -1,0 +1,9 @@
+model_id: emotion2vec-plus-large
+name: emotion2vec+ large (speech emotion recognition)
+tasks: [emotion]
+status: selected
+repository: https://github.com/ddlBoJack/emotion2vec
+weights: {hf_repo: emotion2vec/emotion2vec_plus_large}
+licence: {code: MIT, weights: unknown, personal_use: "yes", commercial_use: unknown, notes: Verify on the model card, sources: [https://huggingface.co/emotion2vec/emotion2vec_plus_large]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 2}

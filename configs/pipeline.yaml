@@ -136,7 +136,7 @@ stages:
     depends_on: [extract_audio_full]
     runtime: audio-gpu
     params_from: analysis.separation
-    model_from: analysis.separation.model
+    model_from: [analysis.separation.model]
     outputs: [vocals.wav, music_effects.wav]
     milestone: M2
 
@@ -204,7 +204,7 @@ stages:
     depends_on: [narrative, character_design, alignment, emotion, speaker_mapping]
     runtime: llm-gpu
     params_from: production.llm
-    model_from: production.llm.model
+    model_from: [production.llm.model, production.llm.polish_model]
     outputs: [localized_lines.json]
     milestone: M3
 
@@ -213,7 +213,7 @@ stages:
     version: "1"
     description: Master identity image plus pose/expression sheet per replacement character (identity-checked).
     depends_on: [character_design, face_embedding, face_clustering]
-    runtime: generation-gpu
+    runtime: image-gpu
     params_from: production.character_images
     model_from: [production.character_images.model, production.character_images.edit_model]
     outputs: [character_references.json]
@@ -242,7 +242,7 @@ stages:
   - name: sample_production
     version: "1"
     description: TTS, shot generation, lip-sync, mix, assembly and QA for the trailer.
-    depends_on: [sample_selection, character_references, voice_design, source_separation, localization, character_database, shot_detection, ingest]
+    depends_on: [sample_selection, character_references, voice_design, source_separation, localization, character_database, shot_detection, active_speaker, ingest]
     runtime: generation-gpu
     params_from: [production, sample, rights, video, audio]
     model_from: [production.tts.model, production.video.model, production.lipsync.model]
@@ -252,7 +252,7 @@ stages:
   - name: full_production
     version: "1"
     description: Full-length production. Requires an approved sample; reuses all sample items.
-    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, localization, character_database, ingest]
+    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, localization, character_database, active_speaker, ingest]
     runtime: generation-gpu
     params_from: [production, rights, video, audio]
     model_from: [production.tts.model, production.video.model, production.lipsync.model]

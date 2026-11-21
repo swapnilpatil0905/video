@@ -184,17 +184,18 @@ class StageContext:
 
 # Approximate GPU memory per runtime class (GB). Exclusive classes always run alone.
 EXCLUSIVE_RUNTIMES = {"llm-gpu", "generation-gpu"}
-RUNTIME_VRAM_GB = {"cpu": 0.0, "analysis-gpu": 16.0, "audio-gpu": 12.0}
+RUNTIME_VRAM_GB = {"cpu": 0.0, "analysis-gpu": 16.0, "audio-gpu": 12.0, "image-gpu": 60.0}
 
 
 class Runner:
     """Executes pending stages; independent stages run concurrently within a GPU memory budget."""
 
     def __init__(self, ctx: Any, runtime: Any, *, before_stage: Callable[[StageSpec, str], None] | None = None,
-                 max_parallel: int | None = None) -> None:
+                 max_parallel: int | None = None, after_stage: Callable[[StageSpec, list[str]], None] | None = None) -> None:
         self.ctx = ctx
         self.runtime = runtime
         self.before_stage = before_stage
+        self.after_stage = after_stage
         self.max_parallel = max_parallel or getattr(ctx.loaded.config.runtime, "max_parallel_stages", 1)
 
     def _can_start(self, spec: StageSpec, running: dict[str, StageSpec], gpu_gb: float) -> bool:
@@ -253,6 +254,12 @@ class Runner:
                         future.result()
                         done.add(spec.name)
                         executed.append(spec.name)
+                        if self.after_stage:
+                            remaining = [i.stage for i in pending] + [s.name for s in running.values()]
+                            try:
+                                self.after_stage(spec, remaining)
+                            except Exception as exc:  # noqa: BLE001 - housekeeping must never fail a run
+                                log.warning("after-stage hook failed: %s", exc)
                     except BaseException as exc:  # noqa: BLE001 - collected, re-raised after running stages finish
                         errors.append(exc)
         if errors:

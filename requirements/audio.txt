@@ -4,3 +4,4 @@ demucs>=4.0.1
 funasr>=1.2
 soundfile>=0.12
 huggingface_hub>=0.25
+modelscope>=1.10

@@ -1,0 +1,9 @@
+model_id: sarvam-m
+name: Sarvam-M (24B, Indic-tuned; Hindi dialogue polishing)
+tasks: [localization_polish]
+status: selected
+repository: https://huggingface.co/sarvamai/sarvam-m
+weights: {hf_repo: sarvamai/sarvam-m}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: unknown, notes: Verify on the model card, sources: [https://huggingface.co/sarvamai/sarvam-m]}
+supported_languages: [hi, bn, ta, te, mr, gu, kn, ml, pa, or, en]
+hardware: {runtimes: [cuda], min_vram_gb: 48, recommended_vram_gb: 80, notes: "bf16 ~48 GB via vLLM"}

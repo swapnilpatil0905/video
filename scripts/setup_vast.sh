@@ -15,11 +15,14 @@ export UV_INDEX_URL="https://pypi.org/simple" UV_DEFAULT_INDEX="https://pypi.org
 export PIP_INDEX_URL="https://pypi.org/simple" UV_PYTHON_PREFERENCE="managed" UV_LINK_MODE="copy"
 unset PIP_EXTRA_INDEX_URL UV_EXTRA_INDEX_URL || true
 [[ -f "$ROOT/.env" ]] && { set -a; source "$ROOT/.env"; set +a; }
+if [[ -z "${HF_TOKEN:-}" ]]; then
+    echo "WARNING: HF_TOKEN not set (create .env first): Hugging Face downloads will be rate-limited and slow"
+fi
 
 say()  { echo -e "\033[1;34m==\033[0m $*"; }
 fail() { echo -e "\033[1;31m!!\033[0m $*"; FAILED+=("$1"); }
 FAILED=()
-TARGETS=("$@"); [[ ${#TARGETS[@]} -eq 0 ]] && TARGETS=(system core diar audio llm parler tts image wan latentsync)
+TARGETS=("$@"); [[ ${#TARGETS[@]} -eq 0 ]] && TARGETS=(system core diar audio llm parler tts image wan latentsync asd sep indicf5 diarizen)
 want() { [[ " ${TARGETS[*]} " == *" $1 "* ]]; }
 
 # ---- system packages ----------------------------------------------------------
@@ -54,7 +57,7 @@ mkvenv() {  # name dir requirements-file [extra uv pip args...]
     if [[ -f "$dir/.vp_ok" && "$dir/.vp_ok" -nt "$req" ]]; then say "$name: ready"; return 0; fi
     say "$name: creating environment (log: $LOGS/setup_$name.log)"
     {
-        uv venv --python 3.11 "$dir" && \
+        uv venv --allow-existing --python 3.11 "$dir" && \
         VIRTUAL_ENV="$dir" uv pip install --python "$dir/bin/python" -r "$req" "$@"
     } >"$LOGS/setup_$name.log" 2>&1 && touch "$dir/.vp_ok" || fail "$name"
 }
@@ -68,13 +71,15 @@ want llm    && mkvenv llm    "$RT/venvs/llm"    "$ROOT/requirements/llm.txt"
 want parler && mkvenv parler "$RT/venvs/parler" "$ROOT/requirements/parler.txt"
 want tts    && mkvenv tts    "$RT/venvs/tts"    "$ROOT/requirements/tts.txt"
 want image  && mkvenv image  "$RT/venvs/image"  "$ROOT/requirements/image.txt"
+want sep     && mkvenv sep     "$RT/venvs/sep"     "$ROOT/requirements/sep.txt"
+want indicf5 && mkvenv indicf5 "$RT/venvs/indicf5" "$ROOT/requirements/indicf5.txt"
 
 fetch() {  # repo_id local_dir [allow_patterns...]
     "$ROOT/.venv-platform/bin/python" - "$@" <<'PY'
 import sys
 from huggingface_hub import snapshot_download
 repo, local, *patterns = sys.argv[1:]
-snapshot_download(repo, local_dir=local, allow_patterns=patterns or None)
+snapshot_download(repo, local_dir=local, allow_patterns=patterns or None, max_workers=16)
 PY
 }
 
@@ -85,7 +90,7 @@ if want wan; then
         say "wan: repository + environment + weights (large download; log: $LOGS/setup_wan.log)"
         {
             [[ -d "$REPO/.git" ]] || git clone --depth 1 https://github.com/Wan-Video/Wan2.2.git "$REPO"
-            uv venv --python 3.11 "$RT/venvs/wan"
+            uv venv --allow-existing --python 3.11 "$RT/venvs/wan"
             PY="$RT/venvs/wan/bin/python"
             uv pip install --python "$PY" torch torchvision packaging ninja psutil wheel setuptools
             grep -v -i '^flash_attn' "$REPO/requirements.txt" > "$RT/venvs/wan/req.txt"
@@ -107,11 +112,43 @@ if want latentsync; then
         say "latentsync: repository + environment + checkpoints (log: $LOGS/setup_latentsync.log)"
         {
             [[ -d "$REPO/.git" ]] || git clone --depth 1 https://github.com/bytedance/LatentSync.git "$REPO"
-            uv venv --python 3.11 "$RT/venvs/latentsync"
+            uv venv --allow-existing --python 3.11 "$RT/venvs/latentsync"
             uv pip install --python "$RT/venvs/latentsync/bin/python" -r "$REPO/requirements.txt"
             fetch ByteDance/LatentSync-1.6 "$REPO/checkpoints" "latentsync_unet.pt" "whisper/tiny.pt"
         } >"$LOGS/setup_latentsync.log" 2>&1 && touch "$RT/venvs/latentsync/.vp_ok" || fail latentsync
     else say "latentsync: ready"; fi
+fi
+
+# ---- DiariZen (speaker diarization) -------------------------------------------------------
+if want diarizen; then
+    REPO="$RT/repos/DiariZen"
+    if [[ ! -f "$RT/venvs/diarizen/.vp_ok" ]]; then
+        say "diarizen: repository + environment (log: $LOGS/setup_diarizen.log)"
+        {
+            [[ -d "$REPO/.git" ]] || git clone --recursive --depth 1 https://github.com/BUTSpeechFIT/DiariZen.git "$REPO"
+            uv venv --allow-existing --python 3.11 "$RT/venvs/diarizen"
+            PY="$RT/venvs/diarizen/bin/python"
+            uv pip install --python "$PY" torch torchaudio
+            [[ -f "$REPO/requirements.txt" ]] && uv pip install --python "$PY" -r "$REPO/requirements.txt"
+            uv pip install --python "$PY" -e "$REPO"
+            [[ -d "$REPO/pyannote-audio" ]] && uv pip install --python "$PY" -e "$REPO/pyannote-audio"
+            "$PY" -c "from diarizen.pipelines.inference import DiariZenPipeline; print('diarizen import ok')"
+        } >"$LOGS/setup_diarizen.log" 2>&1 && touch "$RT/venvs/diarizen/.vp_ok" || fail diarizen
+    else say "diarizen: ready"; fi
+fi
+
+# ---- Light-ASD (active speaker detection) ----------------------------------------------
+if want asd; then
+    REPO="$RT/repos/Light-ASD"
+    if [[ ! -f "$RT/venvs/asd/.vp_ok" ]]; then
+        say "asd: Light-ASD repository + environment (log: $LOGS/setup_asd.log)"
+        {
+            [[ -d "$REPO/.git" ]] || git clone --depth 1 https://github.com/Junhua-Liao/Light-ASD.git "$REPO"
+            uv venv --allow-existing --python 3.11 "$RT/venvs/asd"
+            uv pip install --python "$RT/venvs/asd/bin/python" -r "$ROOT/requirements/asd.txt"
+            ls "$REPO"/weight/*.model
+        } >"$LOGS/setup_asd.log" 2>&1 && touch "$RT/venvs/asd/.vp_ok" || fail asd
+    else say "asd: ready"; fi
 fi
 
 # ---- Real-ESRGAN weights (balanced profile upscaling) ------------------------------
@@ -121,8 +158,16 @@ if want image; then
         || say "WARNING: Real-ESRGAN weights not downloaded (upscaling falls back to Lanczos)"
 fi
 
-if [[ ${#FAILED[@]} -gt 0 ]]; then
-    echo; fail "setup incomplete: ${FAILED[*]} — see $LOGS/setup_<name>.log"
+OPTIONAL=" asd sep indicf5 diarizen "   # upgrades with automatic fallbacks; never block the run
+REQUIRED_FAILED=(); OPTIONAL_FAILED=()
+for f in "${FAILED[@]}"; do
+    if [[ "$OPTIONAL" == *" $f "* ]]; then OPTIONAL_FAILED+=("$f"); else REQUIRED_FAILED+=("$f"); fi
+done
+if [[ ${#OPTIONAL_FAILED[@]} -gt 0 ]]; then
+    say "optional upgrades unavailable (fallbacks will be used): ${OPTIONAL_FAILED[*]} — see $LOGS/setup_<name>.log"
+fi
+if [[ ${#REQUIRED_FAILED[@]} -gt 0 ]]; then
+    echo; echo "!! setup incomplete: ${REQUIRED_FAILED[*]} — see $LOGS/setup_<name>.log"
     exit 1
 fi
 say "setup complete (runtimes under $RT)"

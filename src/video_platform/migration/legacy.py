@@ -66,11 +66,13 @@ LEGACY_PARAMS: dict[str, dict[str, Any]] = {
         "backend": "mlx_whisper",
         "language": "zh",
         "condition_on_previous_text": False,
+        "fallback_model": "faster-whisper-large-v3",
     },
     "transcript_filter": {"drop_patterns": ["优优独播剧场", "YoYo Television Series Exclusive"]},
-    "diarization": {"model": "pyannote-speaker-diarization-community-1", "min_speakers": None, "max_speakers": None},
+    "diarization": {"engine": "pyannote", "model": "pyannote-speaker-diarization-community-1",
+                    "fallback_model": "pyannote-speaker-diarization-community-1", "min_speakers": None, "max_speakers": None},
     "shot_detection": {"detector": "pyscenedetect_content", "threshold": 27.0, "min_scene_len_frames": 15},
-    "frame_sampling": {"strategy": "midpoint", "fps": None, "width": 480, "jpeg_quality": 80},
+    "frame_sampling": {"strategy": "midpoint", "fps": None, "max_per_shot": 12, "width": 480, "jpeg_quality": 80},
     "face_detection": {
         "model": "opencv-yunet-2023mar",
         "confidence_threshold": 0.75,
@@ -316,18 +318,18 @@ def convert_characters(database: dict[str, Any], uri_for: dict[str, str]) -> lis
 def convert_audio_segments(
     timeline: dict[str, Any], clean_transcript: dict[str, Any], language: str | None
 ) -> list[AudioSegment]:
-    """Legacy timeline ``segment_id`` is an index into the cleaned transcript list."""
-    clean = clean_transcript.get("segments", [])
+    """Legacy timeline ``segment_id`` is the original Whisper segment id (verified on project_001 data)."""
+    clean_ids = {int(s["id"]) for s in clean_transcript.get("segments", [])}
     segments = []
     for item in timeline.get("segments", []):
-        index = int(item["segment_id"])
-        if not 0 <= index < len(clean):
-            raise StageFailure(f"timeline segment_id {index} has no matching cleaned transcript segment")
+        raw_id = int(item["segment_id"])
+        if raw_id not in clean_ids:
+            raise StageFailure(f"timeline segment_id {raw_id} is not in the cleaned transcript")
         flags = ["outside_audio"] if item.get("outside_audio") else []
         raw_speaker = item.get("speaker_id")
         segments.append(
             AudioSegment(
-                segment_id=segment_id(int(clean[index]["id"])),
+                segment_id=segment_id(raw_id),
                 start_s=float(item["start"]),
                 end_s=float(item["end"]),
                 text=str(item.get("chinese_text") or item.get("text") or "").strip(),

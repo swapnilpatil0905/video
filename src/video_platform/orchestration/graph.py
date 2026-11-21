@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ..core.errors import ConfigError
 
 WorkItemKind = Literal["project", "shot", "segment", "character", "line", "location"]
-Runtime = Literal["cpu", "analysis-gpu", "generation-gpu", "audio-gpu", "llm-gpu"]
+Runtime = Literal["cpu", "analysis-gpu", "generation-gpu", "audio-gpu", "llm-gpu", "image-gpu"]
 
 
 class StageSpec(BaseModel):

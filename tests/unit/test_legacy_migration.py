@@ -48,7 +48,7 @@ def test_import_makes_analysis_a_cache_hit(legacy_project, legacy_workspace, fak
 
     align = index.find_valid(planner.expected_ids()["alignment"])
     segments = json.loads(importer.store.read_bytes(align.outputs[0].uri.removeprefix("local://")))
-    # timeline segment_id 2 → cleaned index 2 → raw id 3
+    # timeline segment_id 3 = raw Whisper id 3
     assert [s["segment_id"] for s in segments] == ["SEG_000000", "SEG_000003"]
     assert segments[0]["speaker_id"] == "SPK_00" and segments[1]["shot_id"] == "SH_00002"
 

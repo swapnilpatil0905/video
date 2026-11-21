@@ -1,0 +1,13 @@
+torch
+torchaudio
+torchvision
+numpy>=1.26,<2.3
+scipy
+soundfile
+opencv-python-headless>=4.9
+python_speech_features
+scikit-learn
+onnxruntime-gpu>=1.19
+insightface>=0.7.3
+nvidia-cudnn-cu12>=9,<10
+nvidia-cublas-cu12

@@ -1,0 +1,2 @@
+git+https://github.com/ai4bharat/IndicF5.git
+soundfile>=0.12

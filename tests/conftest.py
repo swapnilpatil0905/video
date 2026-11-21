@@ -153,12 +153,12 @@ def legacy_workspace(tmp_path) -> Path:
     for name in ("speaker_character_refined.csv", "speaker_character_candidates.json", "speaker_character_candidates.csv"):
         (root / "characters" / name).write_text("{}" if name.endswith(".json") else "h\n")
 
-    # Timeline segment_id indexes the *cleaned* transcript list (index 1 = invalid timestamp, dropped).
+    # Timeline segment_id is the original Whisper id (id 2 = invalid timestamp, dropped from the timeline).
     timeline = {"segments": [
         {"segment_id": 0, "start": 0.0, "end": 2.0, "chinese_text": "你好", "speaker_id": "SPEAKER_00",
          "speaker_overlap_ratio": 1.0, "speaker_confidence": "strong", "scene_id": "1", "scene_confidence": "strong",
          "overlapping_scene_ids": ["1"], "outside_audio": False},
-        {"segment_id": 2, "start": 4.0, "end": 6.0, "chinese_text": "再见", "speaker_id": "SPEAKER_01",
+        {"segment_id": 3, "start": 4.0, "end": 6.0, "chinese_text": "再见", "speaker_id": "SPEAKER_01",
          "speaker_overlap_ratio": 1.0, "speaker_confidence": "strong", "scene_id": "2", "scene_confidence": "strong",
          "overlapping_scene_ids": ["2"], "outside_audio": False},
     ]}
@@ -170,12 +170,31 @@ def legacy_workspace(tmp_path) -> Path:
     return root
 
 
+LEGACY_ANALYSIS = {
+    "audio": {"stream_index": 0, "sample_rate": 16000, "channels": 1, "codec": "pcm_s16le"},
+    "asr": {"model": "mlx-whisper-large-v3-turbo", "backend": "mlx_whisper", "language": "zh",
+            "condition_on_previous_text": False},
+    "transcript_filters": {"drop_patterns": ["优优独播剧场", "YoYo Television Series Exclusive"]},
+    "diarization": {"engine": "pyannote", "model": "pyannote-speaker-diarization-community-1"},
+    "shots": {"detector": "pyscenedetect_content", "threshold": 27.0, "min_scene_len_frames": 15},
+    "frames": {"strategy": "midpoint", "fps": None, "width": 480, "jpeg_quality": 80},
+    "face_detection": {"model": "opencv-yunet-2023mar", "confidence_threshold": 0.75, "nms_threshold": 0.3,
+                       "top_k": 5000, "padding": 0.35, "crop_size": 256, "jpeg_quality": 90},
+    "face_embedding": {"model": "insightface-buffalo-l", "det_size": 320,
+                       "execution_provider": "CPUExecutionProvider", "face_selection": "largest"},
+    "clustering": {"algorithm": "dbscan", "eps": 0.35, "min_samples": 2, "metric": "cosine"},
+    "character_database": {"representatives_per_cluster": 5},
+    "alignment": {"strong_ratio": 0.7, "moderate_ratio": 0.3},
+}
+
+
 @pytest.fixture
 def legacy_project(tmp_path, monkeypatch, legacy_workspace):
     """A project whose config equals project_001's analysis settings, without a source yet."""
     monkeypatch.setenv("VP_PLATFORM_ROOT", str(REPO_ROOT))
     data = yaml.safe_load(PROJECT_001_CONFIG.read_text(encoding="utf-8"))
     data["project"]["id"] = "legacy_test"
+    data["analysis"] = LEGACY_ANALYSIS  # the settings the legacy scripts used
     project_dir = tmp_path / "projects" / "legacy_test"
     project_dir.mkdir(parents=True)
     return write_yaml(project_dir / "config.yaml", data)

@@ -236,6 +236,30 @@ def char_error_rate(reference: str, hypothesis: str) -> float:
     return prev[-1] / len(r)
 
 
+def choose_tts_engine(cer: dict[str, float | None], *, prefer: str = "chatterbox", margin: float = 0.03) -> str:
+    """Lower back-transcription error wins; ties (within margin) keep the preferred engine (emotion control)."""
+    valid = {k: v for k, v in cer.items() if v is not None}
+    if not valid:
+        return prefer
+    best = min(valid, key=valid.get)
+    if prefer in valid and valid[prefer] <= valid[best] + margin:
+        return prefer
+    return best
+
+
+def match_presence(embedding: list[float] | None, centroids: dict[str, list[float]], threshold: float) -> str | None:
+    """Which (designed) source character, if any, is the face in a clip frame."""
+    if embedding is None or not centroids:
+        return None
+    vec = np.asarray(embedding, dtype="float32")
+    best, score = None, threshold
+    for cid, centroid in centroids.items():
+        sim = float(np.dot(vec, np.asarray(centroid, dtype="float32")))
+        if sim >= score:
+            best, score = cid, sim
+    return best
+
+
 def work_resolution(gen_area: list[int], width: int, height: int) -> tuple[int, int]:
     """Generation-size frame with the output's aspect ratio and the profile's pixel area (multiples of 16)."""
     area = gen_area[0] * gen_area[1]
@@ -307,6 +331,9 @@ class Producer:
             for sh in c["shot_ids"]:
                 self.chars_in_shot.setdefault(sh, []).append(c["character_id"])
         self.export_dir = s.loaded.project_dir / ("sample" if self.sample else "output")
+        self.asd = s.dep_json("active_speaker", "active_speaker.json")
+        self.presence: dict[str, str] = {}
+        self.tts_engine: str | None = None
 
         par = self.prod.parallel
         gpu = s.runtime.gpu_memory_gb
@@ -426,12 +453,83 @@ class Producer:
 
     # ---- TTS -----------------------------------------------------------------------
 
+    # ---- TTS engines -------------------------------------------------------------
+
+    def run_tts_engine(self, engine: str, items: list[dict], tag: str) -> tuple[dict, dict]:
+        """items: {id, text, ref, ref_text, exaggeration, cfg_weight, out}. Returns (lines, errors)."""
+        if not items:
+            return {}, {}
+        workers = self.tts_workers if engine == "chatterbox" else max(1, min(2, self.tts_workers))
+        shards = [items[i :: workers] for i in range(min(workers, len(items)))]
+
+        def run_shard(index_and_shard: tuple[int, list]) -> dict:
+            index, shard = index_and_shard
+            try:
+                if engine == "indicf5":
+                    return self.s.runtime.call_worker("indicf5", "tts_indicf5", {
+                        "hf_repo": self.s.ctx.registry.get(self.prod.tts.indicf5_model).weights.hf_repo, "items": shard,
+                    }, workdir=self.s.workdir / "tts", tag=f"{tag}_indicf5_{index}")
+                return self.s.runtime.call_worker("tts", "tts", {
+                    "language": self.s.config.languages.target, "items": shard,
+                }, workdir=self.s.workdir / "tts", tag=f"{tag}_chatterbox_{index}")
+            except Exception as exc:  # noqa: BLE001
+                return {"lines": {}, "errors": {i["id"]: f"{engine} worker failed: {str(exc)[:300]}" for i in shard}}
+
+        results = media.pmap(run_shard, list(enumerate(shards)), len(shards))
+        return ({k: v for r in results for k, v in r["lines"].items()},
+                {k: v for r in results for k, v in r["errors"].items()})
+
+    def decide_tts_engine(self) -> str:
+        """Bake-off: same lines, same designed voices, both engines; lower Hindi back-transcription error wins."""
+        tts = self.prod.tts
+        if tts.engine != "auto":
+            return tts.engine
+        sample = [ln for ln in self.lines if ln["status"] == "ok" and self.voices.get(ln.get("speaker_id") or "")]
+        sample = sample[: tts.bakeoff_lines]
+        if not sample:
+            return "chatterbox"
+        voices_sha = {v["voice_id"]: sha256_file(self.local(v["uri"])) for v in self.voices.values()}
+        payload = {"lines": [(ln["segment_id"], ln["target_text"]) for ln in sample], "voices": voices_sha,
+                   "models": [tts.model, tts.indicf5_model]}
+        item = self.s.item("tts_engine", payload, "tts_bakeoff")
+        if item.done:
+            return item.data["engine"]
+        started = time.time()
+        ref_text = self.prod.voice_design.reference_text
+        cer: dict[str, float | None] = {}
+        for engine in ("chatterbox", "indicf5"):
+            items = []
+            for ln in sample:
+                voice = self.voices[ln["speaker_id"]]
+                items.append({"id": ln["segment_id"], "text": ln["target_text"], "ref": str(self.local(voice["uri"])),
+                              "ref_text": ref_text, "exaggeration": 0.5, "cfg_weight": tts.cfg_weight,
+                              "out": str(item.path(f"{engine}_{ln['segment_id']}.wav"))})
+            lines, errors = self.run_tts_engine(engine, items, "bakeoff")
+            if not lines:
+                cer[engine] = None
+                self.notes.append(f"TTS bake-off: {engine} produced no audio ({next(iter(errors.values()), '')[:150]})")
+                continue
+            check = [{"segment_id": k, "spoken_text": next(x["text"] for x in items if x["id"] == k),
+                      "audio_path": v["path"], "placed": True} for k, v in lines.items()]
+            result = self.back_transcribe(check, limit=len(check))
+            cer[engine] = result.get("mean_cer")
+        engine = choose_tts_engine(cer)
+        note = f"TTS bake-off on {len(sample)} lines — mean CER {cer} → using {engine}"
+        self.notes.append(note)
+        log.info(note)
+        files = {p.name: p for p in item.path("x").parent.glob("*.wav")}
+        item.finish(files, {"engine": engine, "cer": cer, "seconds": round(time.time() - started, 1)})
+        return engine
+
     def synthesize(self, placed: list[dict]) -> dict[str, dict]:
         started = time.time()
         tts = self.prod.tts
         fallback_voice = next(iter(self.voices.values()), None)
         if fallback_voice is None:
             raise StageFailure("no designed voices available")
+        engine = self.tts_engine or self.decide_tts_engine()
+        self.tts_engine = engine
+        model = tts.model if engine == "chatterbox" else tts.indicf5_model
         jobs: dict[str, tuple[Any, dict, str]] = {}
         ref_sha: dict[str, str] = {}
         for ln in placed:
@@ -448,27 +546,22 @@ class Producer:
                 if not text or (variant == "short" and text == ln["target_text"]):
                     continue
                 exag = tts.exaggeration.get(ln.get("emotion") or "unknown", tts.exaggeration["unknown"])
-                payload = {"text": text, "voice": voice["voice_id"], "ref": ref_sha[str(ref)], "model": tts.model,
-                           "lang": self.s.config.languages.target, "exag": exag, "cfg": tts.cfg_weight}
+                payload = {"text": text, "voice": voice["voice_id"], "ref": ref_sha[str(ref)], "model": model,
+                           "engine": engine, "lang": self.s.config.languages.target, "exag": exag, "cfg": tts.cfg_weight}
                 item = self.s.item("tts", payload, f"line:{ln['segment_id']}:{variant}")
-                jobs[f"{ln['segment_id']}|{variant}"] = (item, {"text": text, "ref": str(ref), "exaggeration": exag,
-                                                                "cfg_weight": tts.cfg_weight}, voice["voice_id"])
+                jobs[f"{ln['segment_id']}|{variant}"] = (item, {
+                    "text": text, "ref": str(ref), "ref_text": self.prod.voice_design.reference_text,
+                    "exaggeration": exag, "cfg_weight": tts.cfg_weight}, voice["voice_id"])
         todo = [(k, v) for k, v in jobs.items() if not v[0].done]
         if todo:
-            shards = [todo[i :: self.tts_workers] for i in range(min(self.tts_workers, len(todo)))]
-            log.info("TTS: %d lines in %d parallel workers (%d cached)", len(todo), len(shards), len(jobs) - len(todo))
-
-            def run_shard(index_and_shard: tuple[int, list]) -> dict:
-                index, shard = index_and_shard
-                return self.s.runtime.call_worker("tts", "tts", {
-                    "language": self.s.config.languages.target,
-                    "items": [{"id": k, "out": str(item.path("line.wav")), **req} for k, (item, req, _) in shard],
-                }, workdir=self.s.workdir / "tts", tag=f"shard{index}")
-
-            results = media.pmap(run_shard, list(enumerate(shards)), len(shards))
-            per_line = (time.time() - started) * len(shards) / max(1, len(todo))
-            merged_lines = {k: v for r in results for k, v in r["lines"].items()}
-            merged_errors = {k: v for r in results for k, v in r["errors"].items()}
+            log.info("TTS (%s): %d lines (%d cached)", engine, len(todo), len(jobs) - len(todo))
+            merged_lines, merged_errors = self.run_tts_engine(
+                engine, [{"id": k, "out": str(item.path("line.wav")), **req} for k, (item, req, _) in todo], "lines")
+            if not merged_lines and engine != "chatterbox":  # engine broke at scale: fall back once
+                self.notes.append(f"{engine} failed for all lines; falling back to chatterbox")
+                engine = self.tts_engine = "chatterbox"
+                return self.synthesize(placed)
+            per_line = (time.time() - started) / max(1, len(todo))
             for key, (item, _, _) in todo:
                 r = merged_lines.get(key)
                 if r:
@@ -554,12 +647,46 @@ class Producer:
 
     def primary_character(self, clip: Clip, placed: list[dict]) -> tuple[str, dict] | None:
         visible = set(self.chars_in_shot.get(clip.shot_id, []))
-        speaking = [ln.get("character_id") for ln in placed if ln["clip_id"] == clip.clip_id and ln.get("character_id")]
+        clip_lines = [ln for ln in placed if ln["clip_id"] == clip.clip_id]
+        for ln in clip_lines:  # trained active-speaker evidence: the speaking face is visible in this shot
+            spk = (self.asd.get(ln["segment_id"]) or {}).get("speaking_character")
+            if spk:
+                visible.add(spk)
+        if clip.clip_id in self.presence:
+            visible.add(self.presence[clip.clip_id])
+        speaking = [ln.get("character_id") for ln in clip_lines if ln.get("character_id")]
         for char in speaking:
             if char in visible and char in self.ref_by_source:
                 return self.ref_by_source[char]
         ranked = sorted((c for c in visible if c in self.ref_by_source), key=lambda c: self.tier_rank.get(c, 99))
         return self.ref_by_source[ranked[0]] if ranked else None
+
+    def detect_presence(self, clips: list[Clip], placed: list[dict]) -> None:
+        """Gap fix: the legacy analysis saw one frame per shot, so characters can be missed. Check each clip's own
+        middle frame against the designed characters' source-face centroids (one batched model call)."""
+        started = time.time()
+        centroids = {r["source_character_id"]: r["source_centroid"] for r in self.refs.values() if r.get("source_centroid")}
+        if not centroids:
+            return
+        unknown = [c for c in clips if not (set(self.chars_in_shot.get(c.shot_id, [])) & set(centroids))]
+        if not unknown:
+            return
+        folder = self.s.workdir / "presence"
+        folder.mkdir(parents=True, exist_ok=True)
+
+        def frame(clip: Clip) -> Path:
+            return media.still(self.source, (clip.src_start + clip.src_end) / 2, folder / f"{clip.clip_id}.jpg")
+
+        frames = dict(zip((c.clip_id for c in unknown), media.pmap(frame, unknown, self.cpu_workers)))
+        embeddings = identity_embeddings(self.s, frames)
+        threshold = self.s.config.analysis.active_speaker.identity_threshold
+        for clip_id, emb in embeddings.items():
+            match = match_presence(emb, centroids, threshold)
+            if match:
+                self.presence[clip_id] = match
+        if self.presence:
+            self.notes.append(f"clip-level identity check found designed characters in {len(self.presence)} extra clip(s)")
+        self.timed("presence_check", started)
 
     def plan_videos(self, clips: list[Clip], placed: list[dict]) -> tuple[dict[str, tuple[Path, dict]], list[VideoJob]]:
         done: dict[str, tuple[Path, dict]] = {}
@@ -901,6 +1028,7 @@ class Producer:
         bed = self.build_bed(clips)
         self.timed("audio_beds", started)
 
+        self.detect_presence(clips, placed)
         done, jobs = self.plan_videos(clips, placed)
         log.info("video: %d clips cached, %d to produce (%d character replacements)", len(done), len(jobs),
                  sum(j.strategy == "animate_replace" for j in jobs))

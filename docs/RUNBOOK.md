@@ -82,6 +82,24 @@ Download the `sample/` folder (Jupyter → right-click → Download, or zip it f
 
 To also compare a cheaper `balanced` trailer, set `compare_profiles: [high, balanced]` under `sample:` in `projects/project_001/config.yaml`.
 
+## v0.5 model upgrades (automatic, each with a fallback)
+
+| Stage | New default | Falls back to |
+|---|---|---|
+| Chinese ASR | FunASR Paraformer-zh (+ VAD + punctuation) | faster-whisper large-v3 |
+| Diarization | DiariZen (WavLM) | pyannote community-1 |
+| Faces | SCRFD + ArcFace on 2 frames/s at 720p | — |
+| Emotion | emotion2vec+ large | SenseVoice |
+| Active speaker | Light-ASD (trained) | lower-face-motion heuristic |
+| Music/voice separation | BS-RoFormer | Demucs |
+| Hindi dialogue | Qwen3 draft + **Sarvam-M** polish | Qwen3 draft |
+| Hindi voices | Chatterbox **vs** IndicF5 bake-off (lower error wins) | Chatterbox |
+| Character sheets | Qwen-Image-Edit-2509 | (same pipeline) |
+| Missed characters | clip-level identity check + Light-ASD evidence | shot keyframe only |
+| Disk | weights deleted after their last stage (`runtime.prune_weights_after_use`) | keep all |
+
+Known remaining gaps: [`docs/GAPS.md`](GAPS.md).
+
 ## What the run does
 
 The first run goes through these steps:

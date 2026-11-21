@@ -1,0 +1,10 @@
+model_id: funasr-paraformer-zh
+name: FunASR Paraformer-zh large (+ fsmn-vad + ct-punc) — Mandarin ASR with sentence timestamps
+tasks: [asr]
+status: selected
+repository: https://github.com/modelscope/FunASR
+weights: {hf_repo: funasr/paraformer-zh}
+licence: {code: MIT, weights: FunASR model licence, personal_use: "yes", commercial_use: unknown, notes: Verify on the model card, sources: [https://github.com/modelscope/FunASR, https://huggingface.co/funasr/paraformer-zh]}
+supported_languages: [zh, en]
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 4}
+inference_parameters: {model: paraformer-zh, vad_model: fsmn-vad, punc_model: ct-punc, hub: ms}

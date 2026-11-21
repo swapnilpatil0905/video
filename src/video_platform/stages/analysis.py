@@ -121,10 +121,23 @@ def asr(s: StageContext) -> None:
         raise ConfigError("analysis.asr.backend 'mlx_whisper' runs only on Apple Silicon; "
                           "use backend: faster_whisper, model: faster-whisper-large-v3")
     audio = s.dep_path("extract_audio", "speech.wav", ".wav")
-    result = s.runtime.call_worker("core", "asr", {
-        "mode": "transcribe", "model": _hf_repo(s, p["model"]), "audio": str(audio), "language": p["language"],
-        "condition_on_previous_text": p["condition_on_previous_text"],
-    }, workdir=s.workdir)
+    result = None
+    if p["backend"] == "funasr":
+        try:
+            record = s.ctx.registry.get(p["model"])
+            result = s.runtime.call_worker("audio", "asr_funasr", {
+                "audio": str(audio), "language": p["language"], "params": record.inference_parameters,
+            }, workdir=s.workdir)
+            s.provenance["engine"] = f"funasr ({p['model']})"
+        except Exception as exc:  # noqa: BLE001
+            s.warn(f"FunASR failed, falling back to {p['fallback_model']}: {str(exc)[:200]}")
+    if result is None:
+        model = p["model"] if p["backend"] == "faster_whisper" else p["fallback_model"]
+        result = s.runtime.call_worker("core", "asr", {
+            "mode": "transcribe", "model": _hf_repo(s, model), "audio": str(audio), "language": p["language"],
+            "condition_on_previous_text": p["condition_on_previous_text"],
+        }, workdir=s.workdir)
+        s.provenance["engine"] = f"faster-whisper ({model})"
     segments = convert_transcript(result, s.config.languages.source)
     s.put_json("transcript.json", _dump(segments))
     s.metric("segment_count", len(segments))
@@ -150,24 +163,60 @@ def transcript_filter(s: StageContext) -> None:
 def diarization(s: StageContext) -> None:
     p = s.params
     audio = s.dep_path("extract_audio", "speech.wav", ".wav")
-    result = s.runtime.call_worker("diar", "diarize", {
-        "hf_repo": _hf_repo(s, p["model"]), "audio": str(audio),
-        "min_speakers": p["min_speakers"], "max_speakers": p["max_speakers"],
-    }, workdir=s.workdir)
+    result = None
+    if p["engine"] == "diarizen":
+        try:
+            result = s.runtime.call_worker("diarizen", "diarize_diarizen", {
+                "hf_repo": _hf_repo(s, p["model"]), "audio": str(audio)}, workdir=s.workdir)
+            s.provenance["engine"] = f"diarizen ({p['model']})"
+        except Exception as exc:  # noqa: BLE001
+            s.warn(f"DiariZen failed, falling back to pyannote: {str(exc)[:200]}")
+    if result is None:
+        model = p["model"] if p["engine"] == "pyannote" else p["fallback_model"]
+        result = s.runtime.call_worker("diar", "diarize", {
+            "hf_repo": _hf_repo(s, model), "audio": str(audio),
+            "min_speakers": p["min_speakers"], "max_speakers": p["max_speakers"],
+        }, workdir=s.workdir)
+        s.provenance["engine"] = f"pyannote ({model})"
     turns = convert_speaker_turns(result)
     s.put_json("speaker_turns.json", _dump(turns))
     s.metric("turn_count", len(turns))
     s.metric("speaker_count", len({t.speaker_id for t in turns}))
 
 
+def find_separation_outputs(folder: Path) -> tuple[Path | None, Path | None]:
+    """audio-separator names outputs '<stem>_(Vocals)_<model>.wav' / '<stem>_(Instrumental)_<model>.wav'."""
+    vocals = next(iter(sorted(folder.glob("*(Vocals)*.wav"))), None)
+    rest = next(iter(sorted(folder.glob("*(Instrumental)*.wav"))), None)
+    return vocals, rest
+
+
 @executor("source_separation")
 def source_separation(s: StageContext) -> None:
     p = s.params
     audio = s.dep_path("extract_audio_full", "full_48k.wav")
+    if p["engine"] == "bs_roformer":
+        out_dir = s.workdir / "roformer"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            s.runtime.run_command("sep", [
+                str(Path(s.runtime.python("sep")).parent / "audio-separator"), str(audio),
+                "--model_filename", p["roformer_model_file"], "--output_dir", str(out_dir), "--output_format", "WAV",
+                "--model_file_dir", str(s.runtime.weights_dir / "audio-separator"),
+            ], log_name="bs_roformer")
+            vocals, rest = find_separation_outputs(out_dir)
+            if vocals and rest:
+                s.put_file(vocals, "vocals.wav")
+                s.put_file(rest, "music_effects.wav")
+                s.provenance["engine"] = f"bs_roformer ({p['roformer_model_file']})"
+                return
+            s.warn(f"BS-RoFormer finished but outputs were not found in {out_dir}; falling back to Demucs")
+        except Exception as exc:  # noqa: BLE001 - fallback keeps the run going
+            s.warn(f"BS-RoFormer unavailable ({str(exc)[:200]}); falling back to Demucs")
     out_root = s.workdir / "demucs"
     s.runtime.run_command("audio", [
         s.runtime.python("audio"), "-m", "demucs", "-n", p["demucs_model"], "--two-stems=vocals",
-        "--segment", str(p["segment_seconds"]), "-o", str(out_root), str(audio),
+        "--segment", str(int(p["segment_seconds"])), "-o", str(out_root), str(audio),  # demucs wants an int
     ], log_name="demucs")
     stem_dir = out_root / p["demucs_model"] / audio.stem
     vocals, rest = stem_dir / "vocals.wav", stem_dir / "no_vocals.wav"
@@ -175,6 +224,7 @@ def source_separation(s: StageContext) -> None:
         raise StageFailure(f"demucs outputs not found in {stem_dir}")
     s.put_file(vocals, "vocals.wav")
     s.put_file(rest, "music_effects.wav")
+    s.provenance["engine"] = f"demucs ({p['demucs_model']})"
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +273,7 @@ def frame_sampling(s: StageContext) -> None:
         if p["strategy"] == "midpoint" or not p["fps"]:
             times = [(start + end) / 2]
         else:
-            count = max(1, min(12, int((end - start) * p["fps"])))
+            count = max(1, min(p["max_per_shot"], int((end - start) * p["fps"])))
             times = [start + (end - start) * (i + 0.5) / count for i in range(count)]
         for index, t in enumerate(times):
             capture.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
@@ -246,13 +296,24 @@ def frame_sampling(s: StageContext) -> None:
 def face_detection(s: StageContext) -> None:
     p = s.params
     record = s.ctx.registry.get(p["model"])
-    if not p["model"].startswith("opencv-yunet"):
-        raise ConfigError("face_detection executor supports the YuNet models (opencv-yunet-*)")
     images = []
     for kf in s.dep_json("frame_sampling", "keyframes.json"):
         path = s.store.materialize(s.store.key_from_uri(kf["uri"]), s.cache_dir)
         images.append({"path": str(path), "shot_id": kf["shot_id"], "time_s": kf["time_s"]})
-    result = s.runtime.call_worker("core", "faces", {
+    if p["model"].startswith("insightface"):
+        npz = s.workdir / "embeddings.npz"
+        result = s.runtime.call_worker("core", "faces", {
+            "mode": "detect_insightface", "images": images, "crop_dir": str(s.workdir / "crops"), "out_npz": str(npz),
+            "det_size": 640, **{k: p[k] for k in ("confidence_threshold", "padding", "crop_size", "jpeg_quality")},
+        }, workdir=s.workdir)
+        s.put_file(npz, "embeddings.npz")
+        s.put_json("face_attributes.json", result["attributes"])
+    elif p["model"].startswith("opencv-yunet"):
+        result = None
+    else:
+        raise ConfigError("face_detection supports opencv-yunet-* and insightface-* models")
+    if result is None:
+        result = s.runtime.call_worker("core", "faces", {
         "mode": "detect", "hf_repo": record.weights.hf_repo, "model_file": (record.weights.files or
                                                                             ["face_detection_yunet_2023mar.onnx"])[0],
         "images": images, "crop_dir": str(s.workdir / "crops"), **{k: p[k] for k in (
@@ -273,6 +334,16 @@ def face_detection(s: StageContext) -> None:
 @executor("face_embedding")
 def face_embedding(s: StageContext) -> None:
     p = s.params
+    reused = s.dep_ref("face_detection", "embeddings.npz", required=False)
+    if reused is not None and p["model"].startswith("insightface") and \
+            s.ctx.registry.get(s.config.analysis.face_detection.model).model_id == p["model"]:
+        # same model already produced identity embeddings during detection: reuse them (no second pass)
+        s.put_file(s.dep_path("face_detection", "embeddings.npz"), "embeddings.npz")
+        attrs = s.dep_ref("face_detection", "face_attributes.json", required=False)
+        if attrs is not None:
+            s.put_json("face_attributes.json", s.dep_json("face_detection", "face_attributes.json"))
+        s.metric("embedding_count", "reused from face_detection")
+        return
     crops = []
     for d in s.dep_json("face_detection", "face_detections.json"):
         path = s.store.materialize(s.store.key_from_uri(d["crop_uri"]), s.cache_dir)
@@ -448,8 +519,14 @@ def emotion(s: StageContext) -> None:
         files.append({"id": seg["segment_id"], "path": str(path)})
     try:
         result = s.runtime.call_worker("audio", "emotion", {
+            "engine": p["engine"], "emotion2vec_repo": p["emotion2vec_repo"],
             "hf_repo": p["hf_repo"], "files": files, "language": s.config.languages.source,
         }, workdir=s.workdir)
+        if p["engine"] == "emotion2vec" and not result["results"]:
+            s.warn("emotion2vec produced no results; falling back to SenseVoice")
+            result = s.runtime.call_worker("audio", "emotion", {
+                "engine": "sensevoice", "hf_repo": p["hf_repo"], "files": files, "language": s.config.languages.source,
+            }, workdir=s.workdir, tag="sensevoice")
     except Exception as exc:
         if p["required"]:
             raise
@@ -477,19 +554,37 @@ def active_speaker(s: StageContext) -> None:
          "shot_start": shots[seg["shot_id"]]["start_s"], "shot_end": shots[seg["shot_id"]]["end_s"]}
         for seg in load_segments(s) if seg.get("shot_id") in shots
     ]
-    result = s.runtime.call_worker("core", "asd", {
-        "video": str(s.loaded.source_video_path), "segments": segments, "centroids": centroids, "params": p,
-    }, workdir=s.workdir)
+    result = None
+    method = p["method"]
+    if method == "light_asd":
+        try:
+            result = s.runtime.call_worker("asd", "asd_light", {
+                "repo": str(s.runtime.repo("lightasd")), "weights": p["light_asd_weights"],
+                "video": str(s.loaded.source_video_path), "audio": str(_speech_audio(s)),
+                "segments": segments, "centroids": centroids, "params": p,
+            }, workdir=s.workdir, timeout_minutes=600)
+            if result.get("fatal"):
+                raise RuntimeError(result["fatal"][-300:])
+        except Exception as exc:  # noqa: BLE001
+            s.warn(f"Light-ASD unavailable, using the lower-face-motion heuristic: {str(exc)[:300]}")
+            result, method = None, "lower_face_motion"
+    if result is None:
+        result = s.runtime.call_worker("core", "asd", {
+            "video": str(s.loaded.source_video_path), "segments": segments, "centroids": centroids, "params": p,
+        }, workdir=s.workdir)
     decisions = {}
+    threshold = p["speaking_probability"] if method == "light_asd" else None
     counts: dict[str, int] = defaultdict(int)
     for seg_id, r in result["results"].items():
         visible = [(c, v) for c, v in r["characters"].items()
                    if v["visible_ratio"] >= p["min_visible_ratio"] and v["motion"] is not None]
         visible.sort(key=lambda x: -x[1]["motion"])
+        if threshold is not None:  # trained model: probabilities
+            visible = [(c, v) for c, v in visible if v["motion"] >= threshold] or []
         if not visible:
-            decision, speaker = "no_visible_face", None
+            decision, speaker = "no_visible_face" if threshold is None else "no_confident_speaker", None
         elif len(visible) == 1:
-            decision, speaker = "single_visible", visible[0][0]
+            decision, speaker = ("asd_margin" if threshold is not None else "single_visible"), visible[0][0]
         elif visible[0][1]["motion"] >= p["margin_ratio"] * max(visible[1][1]["motion"], 1e-6):
             decision, speaker = "asd_margin", visible[0][0]
         else:
@@ -499,7 +594,21 @@ def active_speaker(s: StageContext) -> None:
     s.put_json("active_speaker.json", decisions)
     for name, count in counts.items():
         s.metric(f"asd_{name}", count)
-    s.provenance["method"] = "heuristic lower-face motion + identity (documented limitation; not a trained ASD model)"
+    s.provenance["method"] = ("Light-ASD (trained, AVA-ActiveSpeaker) + identity" if method == "light_asd"
+                              else "heuristic lower-face motion + identity (fallback)")
+
+
+def _speech_audio(s: StageContext) -> Path:
+    """16 kHz speech track: legacy audio/source.wav or this run's speech.wav (via the alignment's inputs)."""
+    candidates = [s.loaded.platform_root / "audio" / "source.wav"]
+    for record in s.index.list_records(s.loaded.project_id, "extract_audio"):
+        for ref in record.outputs:
+            if ref.uri and ref.uri.endswith(".wav"):
+                candidates.append(s.store.materialize(s.store.key_from_uri(ref.uri), s.cache_dir))
+    for path in candidates:
+        if Path(path).exists():
+            return Path(path)
+    raise StageFailure("no 16 kHz speech audio found for active speaker detection")
 
 
 @executor("speaker_mapping")

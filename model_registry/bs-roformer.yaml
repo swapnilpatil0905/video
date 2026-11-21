@@ -1,0 +1,8 @@
+model_id: bs-roformer
+name: BS-RoFormer vocals/instrumental separation (via python-audio-separator)
+tasks: [source_separation]
+status: selected
+repository: https://github.com/nomadkaraoke/python-audio-separator
+weights: {files: [model_bs_roformer_ep_317_sdr_12.9755.ckpt]}
+licence: {code: MIT, weights: unknown, personal_use: "yes", commercial_use: unknown, notes: Checkpoint licences vary; verify the chosen checkpoint, sources: [https://github.com/nomadkaraoke/python-audio-separator]}
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 6}

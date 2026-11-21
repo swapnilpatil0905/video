@@ -75,40 +75,41 @@ rights:
   reuse_source_footage: true              # only for shots with no replacement character (private learning use)
   reuse_source_music_and_effects: true    # Demucs M&E stem, private use only
 
-# Analysis parameters below equal those used by the legacy scripts in pipeline/, so the
-# imported legacy results are cache hits. Changing any value re-runs that stage (and
-# everything downstream) instead of reusing the legacy output.
+# Analysis with the current best open models (v0.5). These differ from the legacy Mac run, so
+# the analysis is recomputed on the GPU (the legacy import adopts only stages whose settings match).
 analysis:
   audio: {stream_index: 0, sample_rate: 16000, channels: 1, codec: pcm_s16le}
   asr:
-    model: mlx-whisper-large-v3-turbo     # legacy run on the Mac; Vast.ai runs use faster-whisper
-    backend: mlx_whisper
+    model: funasr-paraformer-zh             # Mandarin ASR with sentence timestamps
+    backend: funasr
     language: zh
     condition_on_previous_text: false
+    fallback_model: faster-whisper-large-v3
   transcript_filters:
     drop_patterns: ["优优独播剧场", "YoYo Television Series Exclusive"]
   diarization:
-    model: pyannote-speaker-diarization-community-1
-    min_speakers: null
-    max_speakers: null
+    engine: diarizen
+    model: diarizen-wavlm-large
+    fallback_model: pyannote-speaker-diarization-community-1
   shots: {detector: pyscenedetect_content, threshold: 27.0, min_scene_len_frames: 15}
-  frames: {strategy: midpoint, fps: null, width: 480, jpeg_quality: 80}
+  frames: {strategy: uniform, fps: 2.0, max_per_shot: 12, width: 720, jpeg_quality: 85}
   face_detection:
-    model: opencv-yunet-2023mar
-    confidence_threshold: 0.75
-    nms_threshold: 0.3
-    top_k: 5000
+    model: insightface-buffalo-l            # SCRFD detection + ArcFace identity in one pass
+    confidence_threshold: 0.6
     padding: 0.35
     crop_size: 256
     jpeg_quality: 90
   face_embedding:
     model: insightface-buffalo-l
     det_size: 320
-    execution_provider: CPUExecutionProvider
+    execution_provider: CUDAExecutionProvider
     face_selection: largest
-  clustering: {algorithm: dbscan, eps: 0.35, min_samples: 2, metric: cosine}
+  clustering: {algorithm: dbscan, eps: 0.35, min_samples: 3, metric: cosine}
   character_database: {representatives_per_cluster: 5}
   alignment: {strong_ratio: 0.7, moderate_ratio: 0.3}
+  emotion: {engine: emotion2vec}
+  separation: {engine: bs_roformer}
+  active_speaker: {method: light_asd}
 
 notifications:
   enabled: false                          # enabled in M5 (approval service + VPS)

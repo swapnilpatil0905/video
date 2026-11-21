@@ -82,7 +82,9 @@ class Localization(StrictModel):
     cultural_adaptation: bool = True
     natural_dialogue: bool = True
     generate_subtitles: bool = True
-    register: Literal["colloquial", "neutral", "formal"] = "colloquial"
+    # YAML key stays "register"; the attribute is renamed to avoid shadowing a Python built-in.
+    model_config = ConfigDict(extra="forbid", validate_default=True, populate_by_name=True)
+    speech_register: Literal["colloquial", "neutral", "formal"] = Field(default="colloquial", alias="register")
 
 
 class Creative(StrictModel):
@@ -206,7 +208,8 @@ class AudioExtractParams(StrictModel):
 
 class AsrParams(StrictModel):
     model: str = "faster-whisper-large-v3"
-    backend: Literal["mlx_whisper", "faster_whisper", "whisperx"] = "faster_whisper"
+    backend: Literal["mlx_whisper", "faster_whisper", "whisperx", "funasr"] = "faster_whisper"
+    fallback_model: str = Field(default="faster-whisper-large-v3", description="used if the primary ASR fails")
     language: str | None = None
     condition_on_previous_text: bool = False
 
@@ -218,7 +221,10 @@ class TranscriptFilterParams(StrictModel):
 
 
 class DiarizationParams(StrictModel):
+    engine: Literal["diarizen", "pyannote"] = "pyannote"
     model: str = "pyannote-speaker-diarization-community-1"
+    fallback_model: str = Field(default="pyannote-speaker-diarization-community-1",
+                                description="pyannote model used if the primary engine fails")
     min_speakers: int | None = Field(default=None, ge=1)
     max_speakers: int | None = Field(default=None, ge=1)
 
@@ -237,8 +243,9 @@ class ShotParams(StrictModel):
 
 class FrameParams(StrictModel):
     strategy: Literal["midpoint", "uniform"] = "uniform"
-    fps: float | None = Field(default=3.0, gt=0, le=30, description="Sampling rate for 'uniform'.")
-    width: int = Field(default=480, ge=64, le=4096)
+    fps: float | None = Field(default=2.0, gt=0, le=30, description="Sampling rate for 'uniform'.")
+    max_per_shot: int = Field(default=12, ge=1, le=120)
+    width: int = Field(default=720, ge=64, le=4096)
     jpeg_quality: int = Field(default=85, ge=1, le=100)
 
 
@@ -302,6 +309,9 @@ class SpeakerPriorParams(StrictModel):
 
 
 class SeparationParams(StrictModel):
+    engine: Literal["bs_roformer", "demucs"] = Field(
+        default="bs_roformer", description="bs_roformer (cleaner vocals removal); falls back to demucs on failure")
+    roformer_model_file: str = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"
     model: str = "demucs-htdemucs"
     demucs_model: str = "htdemucs"
     segment_seconds: float = Field(default=7.0, gt=1, le=7.8)
@@ -309,13 +319,21 @@ class SeparationParams(StrictModel):
 
 class EmotionParams(StrictModel):
     enabled: bool = True
+    engine: Literal["emotion2vec", "sensevoice"] = Field(
+        default="emotion2vec", description="emotion2vec+ large (speech emotion); SenseVoice as fallback")
+    emotion2vec_repo: str = "emotion2vec/emotion2vec_plus_large"
     model: str = "sensevoice-small"
     hf_repo: str = "FunAudioLLM/SenseVoiceSmall"
     required: bool = Field(default=False, description="If false, a failure marks emotions 'unknown' with a warning.")
 
 
 class ActiveSpeakerParams(StrictModel):
-    method: Literal["lower_face_motion"] = "lower_face_motion"
+    method: Literal["light_asd", "lower_face_motion"] = Field(
+        default="light_asd", description="trained Light-ASD model; falls back to the motion heuristic on failure")
+    light_asd_weights: str = "weight/pretrain_AVA_CVPR.model"
+    asd_fps: int = Field(default=25, ge=10, le=30)
+    asd_max_seconds: float = Field(default=2.5, gt=0.5, le=10)
+    speaking_probability: float = Field(default=0.5, gt=0, lt=1)
     frames_per_segment: int = Field(default=10, ge=3, le=60)
     max_segment_seconds: float = Field(default=4.0, gt=0.5)
     min_face_px: int = Field(default=40, ge=16)
@@ -374,6 +392,8 @@ class LlmSpec(StrictModel):
     tensor_parallel_size: int = Field(default=1, ge=1)
     gpu_memory_utilization: float = Field(default=0.88, gt=0.1, le=0.98)
     max_characters_to_design: int = Field(default=12, ge=1)
+    polish_model: str | None = Field(
+        default="sarvam-m", description="Indic-tuned LLM that rewrites the draft into natural target-language dialogue")
 
 
 _DEFAULT_VARIANTS = {
@@ -387,7 +407,7 @@ _DEFAULT_VARIANTS = {
 
 class CharacterImageSpec(StrictModel):
     model: str = "qwen-image"
-    edit_model: str = "qwen-image-edit"
+    edit_model: str = "qwen-image-edit-2509"
     width: int = Field(default=768, ge=256)
     height: int = Field(default=1344, ge=256)
     steps: int = Field(default=40, ge=4)
@@ -411,6 +431,10 @@ class VoiceDesignSpec(StrictModel):
 
 
 class TtsSpec(StrictModel):
+    engine: Literal["auto", "chatterbox", "indicf5"] = Field(
+        default="auto", description="auto = bake-off on a few lines, lower back-transcription error wins")
+    bakeoff_lines: int = Field(default=12, ge=3, le=50)
+    indicf5_model: str = "indicf5"
     model: str = "chatterbox-multilingual"
     cfg_weight: float = Field(default=0.5, ge=0, le=1)
     exaggeration: dict[str, float] = Field(
@@ -542,10 +566,13 @@ class RuntimeSpec(StrictModel):
     root: str = Field(default="/workspace/vp", description="Created by scripts/setup_vast.sh")
     device: str = "cuda"
     venvs: dict[str, str] = Field(default_factory=dict, description="runtime → python path override")
-    repos: dict[str, str] = Field(default_factory=lambda: {"wan": "repos/Wan2.2", "latentsync": "repos/LatentSync"})
+    repos: dict[str, str] = Field(default_factory=lambda: {
+        "wan": "repos/Wan2.2", "latentsync": "repos/LatentSync", "lightasd": "repos/Light-ASD"})
     weights_dir: str = "weights"
     worker_timeout_minutes: int = Field(default=720, ge=1)
     max_parallel_stages: int = Field(default=3, ge=1, description="independent pipeline stages run concurrently")
+    prune_weights_after_use: bool = Field(
+        default=True, description="delete a model's downloaded weights once no remaining stage in the run needs it")
 
 
 # ---------------------------------------------------------------------------

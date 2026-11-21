@@ -25,7 +25,7 @@ from .core.network_policy import DEFAULT_FORBIDDEN_HOST_PATTERNS, preflight
 from .approval.state import ApprovalStore
 from .migration.legacy import LegacyImporter, build_manifest, compare_manifests
 from .orchestration.runner import Runner
-from .runtime.launcher import RuntimeRunner
+from .runtime.launcher import RuntimeRunner, prune_hf_model
 from .models.registry import ModelRegistry, check_usage_policy, verify_registry
 from .orchestration.graph import StageGraph, load_pipeline
 from .orchestration.planner import Planner
@@ -264,8 +264,22 @@ def cmd_execute(args: argparse.Namespace, ctx: Context) -> int:
             approvals.transition(pid, "ANALYZING", actor=actor)
 
     runtime = RuntimeRunner(ctx.config.runtime, ctx.loaded.state_dir / "logs")
+
+    def after_stage(spec: Any, remaining: list[str]) -> None:
+        """Free disk: drop a model's weights once no remaining stage in this run uses it."""
+        if not ctx.config.runtime.prune_weights_after_use:
+            return
+        still_needed = {m for name in remaining for m in ctx.planner.model_ids(ctx.graph.get(name))}
+        for model_id in ctx.planner.model_ids(spec):
+            repo = ctx.registry.get(model_id).weights.hf_repo
+            if model_id in still_needed or not repo:
+                continue
+            freed = prune_hf_model(Path(runtime.env("core")["HF_HOME"]), repo)
+            if freed > 1:
+                log.info("freed %.0f GB: %s weights are not needed for the rest of this run", freed, model_id)
+
     try:
-        executed = Runner(ctx, runtime, before_stage=before_stage).run(targets)
+        executed = Runner(ctx, runtime, before_stage=before_stage, after_stage=after_stage).run(targets)
     except IllegalStateError:
         raise
     except PlatformError:

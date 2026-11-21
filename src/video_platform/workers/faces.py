@@ -70,6 +70,48 @@ def detect(request: dict) -> dict:
     return {"detections": detections}
 
 
+def detect_insightface(request: dict) -> dict:
+    """SCRFD detection + ArcFace embedding + gender/age in one pass (buffalo_l), with padded crops."""
+    import cv2
+    import numpy as np
+
+    app = _insightface(request.get("det_size", 640))
+    os.makedirs(request["crop_dir"], exist_ok=True)
+    detections, ids, vectors, attributes = [], [], [], {}
+    number = 0
+    for image_item in request["images"]:
+        image = cv2.imread(image_item["path"])
+        if image is None:
+            continue
+        height, width = image.shape[:2]
+        for face in app.get(image):
+            score = float(getattr(face, "det_score", 1.0))
+            if score < request["confidence_threshold"]:
+                continue
+            x1, y1, x2, y2 = (float(v) for v in face.bbox)
+            w, h = x2 - x1, y2 - y1
+            cx, cy = x1 + w / 2, y1 + h / 2
+            side = max(w, h) * (1 + 2 * request["padding"])
+            a, b = max(0, int(cx - side / 2)), max(0, int(cy - side / 2))
+            c, d = min(width, int(cx + side / 2)), min(height, int(cy + side / 2))
+            crop = image[b:d, a:c]
+            if crop.size == 0:
+                continue
+            number += 1
+            face_id = f"FACE_{number:06d}"
+            path = os.path.join(request["crop_dir"], f"face_{number:06d}.jpg")
+            cv2.imwrite(path, cv2.resize(crop, (request["crop_size"],) * 2), [cv2.IMWRITE_JPEG_QUALITY, request["jpeg_quality"]])
+            detections.append({"face_number": number, "shot_id": image_item["shot_id"], "time_s": image_item.get("time_s"),
+                               "bbox": [x1, y1, w, h], "confidence": score, "crop": path})
+            ids.append(face_id)
+            vectors.append(face.normed_embedding.astype("float32"))
+            sex, age = getattr(face, "sex", None), getattr(face, "age", None)
+            attributes[face_id] = {"gender": sex, "age": int(age) if age is not None else None}
+    np.savez_compressed(request["out_npz"], face_ids=np.array(ids),
+                        embeddings=np.stack(vectors) if vectors else np.zeros((0, 512), "float32"))
+    return {"detections": detections, "attributes": attributes}
+
+
 def embed(request: dict) -> dict:
     import cv2
     import numpy as np
@@ -106,4 +148,5 @@ def identity(request: dict) -> dict:
 
 
 def run(request: dict) -> dict:
-    return {"detect": detect, "embed": embed, "identity": identity}[request["mode"]](request)
+    return {"detect": detect, "detect_insightface": detect_insightface, "embed": embed,
+            "identity": identity}[request["mode"]](request)

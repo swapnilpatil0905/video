@@ -98,6 +98,7 @@ def character_references(s: StageContext) -> None:
         references[gid] = {
             "source_character_id": info["design"]["source_character_id"], "name": info["design"]["name"],
             "master": master_ref.uri, "variants": variants, "master_embedding": info["master_embedding"],
+            "source_centroid": centroids.get(info["design"]["source_character_id"]),
             "source_similarity": info["source_similarity"], "variant_identity": info["variant_identity"],
         }
     for gid in pending:

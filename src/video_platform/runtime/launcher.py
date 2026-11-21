@@ -35,6 +35,10 @@ RUNTIME_VENVS = {
     "image": "image",      # diffusers (Qwen-Image)
     "wan": "wan",          # Wan2.2 repository requirements
     "latentsync": "latentsync",
+    "asd": "asd",          # Light-ASD (active speaker detection)
+    "sep": "sep",          # audio-separator (BS-RoFormer)
+    "indicf5": "indicf5",  # IndicF5 Hindi TTS
+    "diarizen": "diarizen",  # DiariZen speaker diarization
 }
 
 
@@ -171,6 +175,18 @@ class RuntimeRunner:
         if not resp.exists():
             raise StageFailure(f"worker {worker} produced no response file")
         return json.loads(resp.read_text(encoding="utf-8"))
+
+
+def prune_hf_model(hf_home: Path, repo_id: str) -> float:
+    """Delete a model from the Hugging Face cache; returns GB freed (it re-downloads if needed again)."""
+    import shutil
+
+    folder = Path(hf_home) / "hub" / ("models--" + repo_id.replace("/", "--"))
+    if not folder.exists():
+        return 0.0
+    size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file() and not f.is_symlink())
+    shutil.rmtree(folder, ignore_errors=True)
+    return size / 1e9
 
 
 def fill_template(template: list[str], values: dict[str, Any]) -> list[str]:

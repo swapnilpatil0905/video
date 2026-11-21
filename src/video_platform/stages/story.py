@@ -19,15 +19,16 @@ def lang_name(code: str) -> str:
     return LANGUAGE_NAMES.get(code.split("-")[0], code)
 
 
-def call_llm(s: StageContext, prompts: list[dict[str, str]]) -> dict[str, Any]:
+def call_llm(s: StageContext, prompts: list[dict[str, str]], *, model_id: str | None = None,
+             tag: str | None = None) -> dict[str, Any]:
     llm = s.config.production.llm
-    record = s.ctx.registry.get(llm.model)
+    record = s.ctx.registry.get(model_id or llm.model)
     response = s.runtime.call_worker("llm", "llm", {
         "hf_repo": record.weights.hf_repo, "prompts": prompts, "backend": llm.backend,
         "max_model_len": llm.max_model_len, "max_tokens": llm.max_tokens, "temperature": llm.temperature,
         "tensor_parallel_size": llm.tensor_parallel_size, "gpu_memory_utilization": llm.gpu_memory_utilization,
         "retries": 2,
-    }, workdir=s.workdir)
+    }, workdir=s.workdir, tag=tag)
     failed = [k for k, v in response["results"].items() if v is None]
     if failed:
         s.warn(f"LLM returned unusable output for {len(failed)} prompt(s): {failed[:10]}")
@@ -174,7 +175,7 @@ def localization(s: StageContext) -> None:
     src, tgt = lang_name(s.config.languages.source), lang_name(s.config.languages.target)
     region = s.config.languages.target_region or ""
     system = (
-        f"You are an expert film dialogue writer localizing a {src} drama into natural, {loc.register} {tgt} "
+        f"You are an expert film dialogue writer localizing a {src} drama into natural, {loc.speech_register} {tgt} "
         f"for audiences in {region or 'the target region'}. Preserve meaning, intent, emotion and each "
         f"character's way of speaking. Adapt idioms and cultural references naturally. Avoid stiff, textbook "
         f"{tgt}. Use the given replacement names instead of original names. Write {tgt} in its native script. "
@@ -221,11 +222,60 @@ def localization(s: StageContext) -> None:
                 "delivery": (x or {}).get("delivery", ""), "target_language": s.config.languages.target,
                 "status": "ok" if x and str(x.get("text", "")).strip() else "missing",
             })
+    polish_model = s.config.production.llm.polish_model
+    if polish_model:
+        localized, polished = polish_lines(s, localized, chunks, names, polish_model, tgt, region)
+        s.metric("polished_lines", polished)
+        s.provenance["polish_model"] = polish_model
     if missing:
         s.warn(f"{len(missing)} lines have no translation (status=missing, kept silent and reported): {missing[:10]}")
     s.put_json("localized_lines.json", localized)
     s.metric("lines", len(localized))
     s.metric("missing", len(missing))
+
+
+def polish_lines(s: StageContext, lines: list[dict], chunks: list[dict], names: dict[str, str], model_id: str,
+                 tgt: str, region: str) -> tuple[list[dict], int]:
+    """Second pass with an Indic-tuned model: make drafts sound like natural spoken dialogue (same meaning)."""
+    system = (
+        f"You are a native {tgt} screenwriter{' from ' + region if region else ''}. Rewrite draft film dialogue so it "
+        f"sounds like natural, everyday spoken {tgt}: idiomatic, emotional, not literal or textbook. Keep the exact "
+        "meaning, the speaker's intent and the character names. Keep lines short enough to speak in the available "
+        f"time. Write {tgt} in its native script. Answer in JSON only."
+    )
+    by_chunk: dict[str, list[dict]] = defaultdict(list)
+    chunk_of = {sid: c["chunk_id"] for c in chunks for sid in c["segment_ids"]}
+    for line in lines:
+        if line["status"] == "ok":
+            by_chunk[chunk_of.get(line["segment_id"], "chunk_x")].append(line)
+    prompts = []
+    for chunk_id, items in by_chunk.items():
+        rows = "\n".join(f"{x['segment_id']} | {x['target_duration_s']:.1f}s | {x['emotion']} | source: {x['source_text']} | "
+                         f"draft: {x['target_text']} | short draft: {x['short_text']}" for x in items)
+        prompts.append({"id": chunk_id, "system": system, "user": (
+            f"Character names: {', '.join(names.values())}\n\nLines (id | seconds | emotion | source | draft | short draft):\n"
+            f"{rows}\n\nReturn JSON: {{\"lines\": [{{\"id\": str, \"text\": str, \"short\": str}}]}} with every id exactly once."
+        )})
+    try:
+        results = call_llm(s, prompts, model_id=model_id, tag="polish")
+    except Exception as exc:  # noqa: BLE001 - keep the drafts
+        s.warn(f"dialogue polish with {model_id} failed; keeping the first-pass translation: {str(exc)[:200]}")
+        return lines, 0
+    improved = {}
+    for result in results.values():
+        for item in (result or {}).get("lines", []):
+            if isinstance(item, dict) and str(item.get("text", "")).strip():
+                improved[item.get("id")] = item
+    count = 0
+    for line in lines:
+        item = improved.get(line["segment_id"])
+        if item:
+            line["draft_text"] = line["target_text"]
+            line["target_text"] = str(item["text"]).strip()
+            line["short_text"] = str(item.get("short") or line["short_text"]).strip()
+            line["polished_by"] = model_id
+            count += 1
+    return lines, count
 
 
 def group_by(items: list[dict], key: str) -> dict[str, list[dict]]:

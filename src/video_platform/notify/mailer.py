@@ -99,9 +99,17 @@ def send_via_ntfy(subject: str, body: str, *, retries: int = 3) -> None:
             log.info("notification sent via ntfy.sh e-mail forwarding to %s", to)
             return
         except Exception as exc:  # noqa: BLE001
-            last = exc
+            detail = ""
+            if hasattr(exc, "read"):
+                try:
+                    detail = " — " + exc.read().decode("utf-8", "replace")[:300]
+                except Exception:  # noqa: BLE001
+                    pass
+            last = RuntimeError(f"{exc}{detail}")
+            if getattr(exc, "code", None) in (400, 401, 403):
+                break  # not transient: retrying will not help
             time.sleep(5 * (attempt + 1))
-    raise RuntimeError(f"ntfy.sh forwarding failed: {last}")
+    raise RuntimeError(f"ntfy.sh forwarding failed: {last}. Use a Gmail app password instead (SMTP_* in .env).")
 
 
 def send(subject: str, body: str, attachments: list[Path] | None = None, *, retries: int = 3) -> None:
