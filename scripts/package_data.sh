@@ -17,7 +17,7 @@ DATA=(input/source.mp4 transcripts/chinese_transcript.json transcripts/chinese_t
       faces/clustered_faces.csv faces/cluster_summary.csv faces/cluster_audit.csv faces/cluster_representatives.csv
       faces/clustering_evaluation.csv characters timeline models)
 zip -r -q -n .mp4:.wav:.npz:.jpg:.jpeg:.png:.onnx "$OUT" "${DATA[@]}" -x '*.DS_Store'
-if [[ -f huggingface_token.text ]]; then
+if [[ -f huggingface_token.text && "${NO_ENV:-0}" != "1" ]]; then   # NO_ENV=1: no secrets (e.g. for git)
     STAGE="$(mktemp -d)"
     {
         echo "HF_TOKEN=$(tr -d '[:space:]' < huggingface_token.text)"
