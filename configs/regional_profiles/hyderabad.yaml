@@ -1,0 +1,158 @@
+# Regional profile: Hyderabad (Hyderabadi Hindi / Dakhni Urdu / Hinglish).
+# Data only — the adaptation engine is region-agnostic. Copy this file to add another city.
+#
+# Rules for contributors:
+# - Only REAL places belong in `locations`. Fictional businesses, buildings and addresses are
+#   generated per story and always marked fictional.
+# - No travel times. Distance is expressed only as zone relations (same zone / adjacent / far).
+# - Expressions carry usage notes; the writer uses them only where character, emotion and context fit.
+
+id: hyderabad
+city: Hyderabad
+state: Telangana
+country: India
+languages_heard: [Hindi, Urdu, Dakhni, Telugu, English]
+
+dialects:
+  dakhni_urdu:
+    description: >-
+      Dakhni Urdu / old Hyderabadi speech: Urdu-rich, relaxed rhythm, "-re" verb endings
+      (kya karre, kidhar jaare), "-ku" datives (mereku, tereku, kaiku), "nakko" for no, "hau" for yes.
+    accent_for_voice: "speaks Hindi with a strong Hyderabadi Dakhni accent, relaxed and expressive"
+  hyderabadi_hindi:
+    description: >-
+      Everyday Hyderabadi Hindi: standard Hindi grammar with occasional Dakhni markers and Urdu
+      words, light English code-switching. Most young urban characters.
+    accent_for_voice: "speaks Hindi with a light Hyderabadi accent"
+  neutral_hindi:
+    description: Natural, conversational standard Hindi (no regional markers), Hinglish as fits the character.
+    accent_for_voice: "speaks natural, neutral Indian Hindi"
+
+# Dakhni / Hyderabadi expressions. register: casual | warm | rough | comic | any
+# min_intensity: only characters with dialect intensity >= this use it.
+expressions:
+  - {roman: "Arre miyaan", devanagari: "अरे मियाँ", meaning: "hey man / come on", register: casual, min_intensity: 0.4, use: "friendly address, mild exasperation"}
+  - {roman: "Kya karre?", devanagari: "क्या कर्रे?", meaning: "what are you doing?", register: casual, min_intensity: 0.5, use: "casual question among friends/family"}
+  - {roman: "Nakko", devanagari: "नक्को", meaning: "no / don't", register: any, min_intensity: 0.4, use: "refusal; firm or playful"}
+  - {roman: "Hau", devanagari: "हौ", meaning: "yes", register: casual, min_intensity: 0.5, use: "casual agreement"}
+  - {roman: "Kaiku?", devanagari: "काइकू?", meaning: "why?", register: casual, min_intensity: 0.5, use: "why — casual or annoyed"}
+  - {roman: "Kidhar jaare?", devanagari: "किधर जारे?", meaning: "where are you going?", register: casual, min_intensity: 0.5, use: "casual"}
+  - {roman: "Mereku", devanagari: "मेरेकू", meaning: "to me / I (need)", register: casual, min_intensity: 0.5, use: "replaces 'mujhe'"}
+  - {roman: "Tereku", devanagari: "तेरेकू", meaning: "to you", register: casual, min_intensity: 0.5, use: "replaces 'tujhe'; close or rough"}
+  - {roman: "Baigan", devanagari: "बैंगन", meaning: "nonsense! (dismissive)", register: comic, min_intensity: 0.6, use: "dismissive, comic"}
+  - {roman: "Hallu hallu", devanagari: "हल्लू हल्लू", meaning: "slowly, gently", register: warm, min_intensity: 0.5, use: "take it easy; caring or teasing"}
+  - {roman: "Khaali-peeli", devanagari: "खाली-पीली", meaning: "for no reason", register: casual, min_intensity: 0.3, use: "pointless; also common in Mumbai"}
+  - {roman: "Kya bolre?", devanagari: "क्या बोल्रे?", meaning: "what are you saying?", register: casual, min_intensity: 0.5, use: "surprise / disbelief"}
+  - {roman: "Pakka", devanagari: "पक्का", meaning: "for sure", register: any, min_intensity: 0.0, use: "promise / certainty"}
+  - {roman: "Ek dum", devanagari: "एकदम", meaning: "totally", register: any, min_intensity: 0.0, use: "emphasis"}
+
+naming:
+  conventions: >-
+    Hyderabad is multi-community: Telugu families (surnames such as Reddy, Rao, Varma, Naidu, Goud),
+    Hyderabadi Muslim families (Khan, Mirza, Siddiqui, Ahmed, Hussaini, Baig), North Indian and
+    Marwari families settled in the city (Sharma, Agarwal, Malhotra, Jain), and Christian families.
+    Choose a name that fits the character's family and background in THIS story; do not pick a
+    community for flavour, and never stereotype.
+  examples_male: [Arjun Reddy, Aditya Varma, Kabir Khan, Sameer Ahmed, Rohan Malhotra, Ayaan Mirza, Vikram Rao]
+  examples_female: [Ananya Reddy, Meera Sharma, Zoya Khan, Sana Mirza, Kavya Rao, Ayesha Siddiqui, Nisha Varma]
+  honorifics:
+    elder_male: ["bhai (peer)", "bhaiyya", "anna (Telugu elder brother)", "chacha", "mamu", "abba / nanna (father)"]
+    elder_female: ["aapa / akka (elder sister)", "baaji", "ammi / amma (mother)", "khala", "atthamma"]
+    respectful: ["saab", "ji", "sir / madam (office)"]
+
+culture:
+  food: [Irani chai, Osmania biscuits, Hyderabadi biryani, haleem (Ramzan), double ka meetha, lukhmi, pathar ka gosht]
+  festivals: [Bonalu, Bathukamma, Ramzan, Eid, Diwali, Sankranti, Ganesh Chaturthi]
+  everyday: [auto-rickshaw haggling, Hyderabad Metro commute, ORR drives, evening walks on Necklace Road, IT office culture in HITEC City]
+
+# Zones: distance is only ever "same zone" (near), "adjacent" (moderate) or "far".
+zones:
+  old_city: "south of the Musi river, heritage core"
+  central: "Abids / Koti / Hussain Sagar belt"
+  west_central: "Banjara Hills, Jubilee Hills, Ameerpet, Mehdipatnam, Tolichowki"
+  west_it: "HITEC City, Madhapur, Gachibowli, Financial District, Kokapet"
+  north: "Secunderabad, Begumpet"
+  north_west: "Kukatpally, KPHB, Miyapur"
+  east: "Uppal, LB Nagar, Dilsukhnagar"
+  south: "Shamshabad (airport)"
+adjacent_zones:
+  - [old_city, central]
+  - [central, west_central]
+  - [central, north]
+  - [central, east]
+  - [west_central, west_it]
+  - [west_central, north]
+  - [west_central, north_west]
+  - [north_west, west_it]
+  - [north, north_west]
+  - [old_city, east]
+  - [old_city, south]
+
+# Real places only. tags help choose places that fit a character (never as stereotypes).
+locations:
+  # landmarks
+  - {name: Charminar, devanagari: चारमीनार, kind: landmark, zone: old_city, tags: [heritage, crowded, market]}
+  - {name: Golconda Fort, devanagari: गोलकोंडा किला, kind: landmark, zone: west_central, tags: [heritage, tourist]}
+  - {name: Hussain Sagar, devanagari: हुसैन सागर, kind: landmark, zone: central, tags: [lake, evening, outing]}
+  - {name: Tank Bund, devanagari: टैंक बंड, kind: road, zone: central, tags: [lake, drive, evening]}
+  - {name: Necklace Road, devanagari: नेकलेस रोड, kind: road, zone: central, tags: [lake, evening, walk, romance]}
+  - {name: Chowmahalla Palace, devanagari: चौमहल्ला पैलेस, kind: landmark, zone: old_city, tags: [heritage]}
+  - {name: Mecca Masjid, devanagari: मक्का मस्जिद, kind: landmark, zone: old_city, tags: [heritage, religious]}
+  - {name: Falaknuma, devanagari: फलकनुमा, kind: neighbourhood, zone: old_city, tags: [heritage, residential]}
+  - {name: Durgam Cheruvu, devanagari: दुर्गम चेरुवु, kind: landmark, zone: west_it, tags: [lake, cable_bridge, evening, romance]}
+  - {name: Lumbini Park, devanagari: लुम्बिनी पार्क, kind: landmark, zone: central, tags: [park, family]}
+  - {name: Shilparamam, devanagari: शिल्पारामम, kind: landmark, zone: west_it, tags: [crafts, outing, family]}
+  # neighbourhoods
+  - {name: Old City, devanagari: ओल्ड सिटी, kind: neighbourhood, zone: old_city, tags: [traditional, family_business, residential]}
+  - {name: Mehdipatnam, devanagari: मेहदीपटनम, kind: neighbourhood, zone: west_central, tags: [residential, busy, bus_hub]}
+  - {name: Tolichowki, devanagari: टोलीचौकी, kind: neighbourhood, zone: west_central, tags: [residential, food]}
+  - {name: Banjara Hills, devanagari: बंजारा हिल्स, kind: neighbourhood, zone: west_central, tags: [affluent, dining, offices]}
+  - {name: Jubilee Hills, devanagari: जुबली हिल्स, kind: neighbourhood, zone: west_central, tags: [affluent, film_industry, residential]}
+  - {name: Ameerpet, devanagari: अमीरपेट, kind: neighbourhood, zone: west_central, tags: [students, coaching, metro_interchange]}
+  - {name: Punjagutta, devanagari: पंजागुट्टा, kind: neighbourhood, zone: west_central, tags: [shopping, hospitals]}
+  - {name: Gachibowli, devanagari: गचीबौली, kind: neighbourhood, zone: west_it, tags: [it_professionals, offices, apartments]}
+  - {name: Madhapur, devanagari: माधापुर, kind: neighbourhood, zone: west_it, tags: [it_professionals, nightlife]}
+  - {name: HITEC City, devanagari: हाईटेक सिटी, kind: neighbourhood, zone: west_it, tags: [it_professionals, offices]}
+  - {name: Kondapur, devanagari: कोंडापुर, kind: neighbourhood, zone: west_it, tags: [it_professionals, apartments]}
+  - {name: Financial District, devanagari: फाइनेंशियल डिस्ट्रिक्ट, kind: neighbourhood, zone: west_it, tags: [offices, corporate]}
+  - {name: Kokapet, devanagari: कोकापेट, kind: neighbourhood, zone: west_it, tags: [new_development, affluent, apartments]}
+  - {name: Kukatpally, devanagari: कूकटपल्ली, kind: neighbourhood, zone: north_west, tags: [middle_class, residential, shopping]}
+  - {name: Miyapur, devanagari: मियापुर, kind: neighbourhood, zone: north_west, tags: [residential, metro_terminus]}
+  - {name: Secunderabad, devanagari: सिकंदराबाद, kind: neighbourhood, zone: north, tags: [railway, cantonment, markets]}
+  - {name: Begumpet, devanagari: बेगमपेट, kind: neighbourhood, zone: north, tags: [offices, old_airport]}
+  - {name: Abids, devanagari: आबिड्स, kind: neighbourhood, zone: central, tags: [shopping, sunday_book_market]}
+  - {name: Koti, devanagari: कोठी, kind: neighbourhood, zone: central, tags: [shopping, students, market]}
+  - {name: Himayatnagar, devanagari: हिमायतनगर, kind: neighbourhood, zone: central, tags: [shopping, middle_class]}
+  - {name: Uppal, devanagari: उप्पल, kind: neighbourhood, zone: east, tags: [residential, cricket_stadium]}
+  - {name: Dilsukhnagar, devanagari: दिलसुखनगर, kind: neighbourhood, zone: east, tags: [middle_class, students, shopping]}
+  - {name: LB Nagar, devanagari: एलबी नगर, kind: neighbourhood, zone: east, tags: [residential, metro_terminus]}
+  - {name: Shamshabad, devanagari: शमशाबाद, kind: neighbourhood, zone: south, tags: [airport]}
+  # transport and roads
+  - {name: ORR, devanagari: ओआरआर, kind: road, zone: ring, tags: [outer_ring_road, highway, drive]}
+  - {name: PVNR Expressway, devanagari: पीवीएनआर एक्सप्रेसवे, kind: road, zone: west_central, tags: [flyover, airport_route]}
+  - {name: Rajiv Gandhi International Airport, devanagari: एयरपोर्ट, kind: transport, zone: south, tags: [airport, travel]}
+  - {name: Ameerpet Metro Station, devanagari: अमीरपेट मेट्रो स्टेशन, kind: metro_station, zone: west_central, tags: [interchange]}
+  - {name: Raidurg Metro Station, devanagari: रायदुर्ग मेट्रो स्टेशन, kind: metro_station, zone: west_it, tags: [it_corridor]}
+  - {name: HITEC City Metro Station, devanagari: हाईटेक सिटी मेट्रो स्टेशन, kind: metro_station, zone: west_it, tags: [it_corridor]}
+  - {name: Miyapur Metro Station, devanagari: मियापुर मेट्रो स्टेशन, kind: metro_station, zone: north_west, tags: [terminus]}
+  - {name: LB Nagar Metro Station, devanagari: एलबी नगर मेट्रो स्टेशन, kind: metro_station, zone: east, tags: [terminus]}
+  - {name: Secunderabad Railway Station, devanagari: सिकंदराबाद स्टेशन, kind: transport, zone: north, tags: [railway]}
+  - {name: Nampally Station, devanagari: नामपल्ली स्टेशन, kind: transport, zone: central, tags: [railway]}
+  - {name: Lingampally MMTS, devanagari: लिंगमपल्ली एमएमटीएस, kind: transport, zone: north_west, tags: [local_train]}
+  - {name: Punjagutta junction, devanagari: पंजागुट्टा जंक्शन, kind: junction, zone: west_central, tags: [traffic]}
+  - {name: Biodiversity junction, devanagari: बायोडायवर्सिटी जंक्शन, kind: junction, zone: west_it, tags: [traffic, flyover]}
+  # lifestyle (generic — real business names are avoided; invented ones are marked fictional)
+  - {name: Laad Bazaar, devanagari: लाड बाज़ार, kind: market, zone: old_city, tags: [bangles, wedding_shopping, crowded]}
+  - {name: Begum Bazaar, devanagari: बेगम बाज़ार, kind: market, zone: central, tags: [wholesale, family_business]}
+  - {name: Sultan Bazaar, devanagari: सुल्तान बाज़ार, kind: market, zone: central, tags: [shopping, budget]}
+  - {name: Gudimalkapur flower market, devanagari: गुडीमलकापुर फूल बाज़ार, kind: market, zone: west_central, tags: [flowers, early_morning]}
+  - {name: an Irani café near Charminar, devanagari: चारमीनार के पास का ईरानी कैफ़े, kind: lifestyle, zone: old_city, tags: [chai, osmania_biscuits, friends, morning]}
+  - {name: a biryani place in Tolichowki, devanagari: टोलीचौकी की बिरयानी, kind: lifestyle, zone: west_central, tags: [food, family, celebration]}
+  - {name: a chai spot near the office, devanagari: ऑफिस के पास की चाय, kind: lifestyle, zone: any, tags: [colleagues, break]}
+
+rules:
+  - Use a real place only when the scene's setting, the characters' background or their movement calls for it.
+  - At most one real place reference in a short exchange; many scenes need none.
+  - Never claim two places are near each other unless they share a zone.
+  - Never state travel times or invent roads, metro stations or businesses.
+  - Invented businesses / buildings / addresses must be marked fictional in the location plan.

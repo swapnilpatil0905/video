@@ -52,6 +52,10 @@ def select_trailer(
     target_seconds: float,
     sel: dict,
     avoid_spoilers: bool = True,
+    scene_of: dict[str, dict] | None = None,
+    accents: dict[str, str] | None = None,
+    required_moods: list[str] | None = None,
+    min_accents: int = 0,
 ) -> tuple[list[dict], list[dict]]:
     tiers = {p["character_id"]: p for p in profiles}
     chunk_of = {sid: c for c in chunks for sid in c["segment_ids"]}
@@ -75,11 +79,14 @@ def select_trailer(
         score = profile.get("score", 0.0) + (0.5 if chunk.get("turning_point") else 0.0)
         score += 0.3 if line.get("emotion") not in (None, "neutral", "unknown") else 0.0
         score += 0.4 if speaking_shot else 0.0
+        scene = (scene_of or {}).get(sid, {})
+        score -= 0.3 if line.get("quality") == "below_threshold" else 0.0
         pad = sel["clip_padding_seconds"]
         candidates.append({
             "segment_id": sid, "character_id": char, "shot_id": shot["shot_id"], "start_s": line["start_s"],
             "clip_start": max(shot["start_s"], line["start_s"] - pad), "clip_end": min(shot["end_s"], line["end_s"] + pad),
             "emotion": line.get("emotion"), "speaking_shot": speaking_shot, "score": round(score, 4),
+            "mood": scene.get("mood"), "scene_id": scene.get("scene_id"), "accent": (accents or {}).get(char or ""),
             "third": min(2, int(3 * line["start_s"] / max(video_duration, 1e-6))),
         })
 
@@ -103,6 +110,26 @@ def select_trailer(
         else:
             coverage_reason[p["character_id"]] = (
                 "no speaking line of usable length outside the spoiler zone" if not own else "duration budget exhausted")
+
+    # showcase coverage: one line per required scene mood (e.g. emotional, comedy, confrontation, romance|suspense)
+    budget = target_seconds * 1.15
+    for group in required_moods or []:
+        moods = set(group.split("|"))
+        if any(c.get("mood") in moods for c in chosen):
+            continue
+        pool = sorted((c for c in candidates if c.get("mood") in moods and c["segment_id"] not in {x["segment_id"] for x in chosen} and far_enough(c)),
+                      key=lambda c: (not c["speaking_shot"], -c["score"]))
+        if pool and total() + pool[0]["clip_end"] - pool[0]["clip_start"] <= budget:
+            chosen.append({**pool[0], "reason": f"showcase: {pool[0]['mood']} scene"})
+            coverage_reason.setdefault(f"mood:{group}", "covered")
+        else:
+            coverage_reason[f"mood:{group}"] = "no usable line in such a scene" if not pool else "duration budget exhausted"
+    if min_accents and len({c.get("accent") for c in chosen if c.get("accent")}) < min_accents:
+        have = {c.get("accent") for c in chosen}
+        pool = sorted((c for c in candidates if c.get("accent") and c.get("accent") not in have
+                       and c["segment_id"] not in {x["segment_id"] for x in chosen} and far_enough(c)), key=lambda c: (not c["speaking_shot"], -c["score"]))
+        if pool and total() + pool[0]["clip_end"] - pool[0]["clip_start"] <= budget:
+            chosen.append({**pool[0], "reason": f"showcase: second accent ({pool[0]['accent']})"})
 
     taken = {c["segment_id"] for c in chosen}
     remaining = sorted((c for c in candidates if c["segment_id"] not in taken), key=lambda c: -c["score"])
@@ -143,12 +170,25 @@ def sample_selection(s: StageContext) -> None:
         hit = next((sid for sid, sh in shots.items() if sh["start_s"] <= mid < sh["end_s"]), None)
         if hit:
             segment_shot[line["segment_id"]] = hit
+    scenes = s.dep_json("scene_analysis", "scenes.json")["scenes"]
+    scene_of = {sid: sc for sc in scenes for sid in sc["segment_ids"]}
+    identity = s.dep_json("character_identity", "character_identity.json")
+    accents = {c["character_id"]: f"{c['language_profile']['accent']}:{round(c['language_profile']['dialect_intensity'], 1)}"
+               for c in identity.get("characters", [])}
     chosen, characters = select_trailer(
         lines=lines, profiles=s.dep_json("character_profile", "character_profiles.json"), asd=asd,
         chunks=s.dep_json("narrative", "narrative.json")["chunks"], shots=shots, segment_shot=segment_shot,
         video_duration=duration, target_seconds=s.config.sample.duration_seconds, sel=sel,
         avoid_spoilers=s.config.sample.spoiler_policy == "avoid_major_twists",
+        scene_of=scene_of, accents=accents, required_moods=s.config.sample.showcase_moods,
+        min_accents=s.config.sample.showcase_min_accents,
     )
+    moods_in = sorted({c.get("mood") for c in chosen if c.get("mood")})
+    s.metric("moods", moods_in)
+    s.metric("accents", sorted({c.get("accent") for c in chosen if c.get("accent")}))
+    for group in s.config.sample.showcase_moods:
+        if not set(group.split("|")) & set(moods_in):
+            s.warn(f"trailer has no '{group}' scene (none usable in the source outside the spoiler zone, or budget)")
     s.put_json("dialogue_selection.json", chosen)
     s.put_json("character_selection.json", characters)
     s.metric("clips", len(chosen))
@@ -304,6 +344,12 @@ class Producer:
 
     def __init__(self, s: StageContext, scope: str, profile: str) -> None:
         self.s = s
+        from ..storytelling import EmotionAndDeliveryPlanner
+
+        audio_cfg = s.config.localization.audio
+        self.emotion_aware = audio_cfg.emotion_aware_tts
+        self.delivery = EmotionAndDeliveryPlanner(audio_cfg.model_dump())
+        self.audio_direction: dict[str, dict] = {}
         self.scope = scope
         cfg = s.config
         self.prod = cfg.production
@@ -513,7 +559,8 @@ class Producer:
                       "audio_path": v["path"], "placed": True} for k, v in lines.items()]
             result = self.back_transcribe(check, limit=len(check))
             cer[engine] = result.get("mean_cer")
-        engine = choose_tts_engine(cer)
+        # IndicF5 has no emotion controls: with emotion-aware delivery it must be clearly more intelligible to win
+        engine = choose_tts_engine(cer, margin=0.08 if self.emotion_aware else 0.03)
         note = f"TTS bake-off on {len(sample)} lines — mean CER {cer} → using {engine}"
         self.notes.append(note)
         log.info(note)
@@ -545,13 +592,19 @@ class Producer:
                 text = ln["target_text"] if variant == "text" else ln.get("short_text") or ""
                 if not text or (variant == "short" and text == ln["target_text"]):
                     continue
-                exag = tts.exaggeration.get(ln.get("emotion") or "unknown", tts.exaggeration["unknown"])
+                if self.emotion_aware and ln.get("direction"):
+                    controls = self.delivery.tts_controls(ln["direction"], base_cfg=tts.cfg_weight)
+                    exag, cfg = controls["exaggeration"], controls["cfg_weight"]
+                    self.audio_direction[ln["segment_id"]] = controls
+                else:
+                    exag = tts.exaggeration.get(ln.get("emotion") or "unknown", tts.exaggeration["unknown"])
+                    cfg = tts.cfg_weight
                 payload = {"text": text, "voice": voice["voice_id"], "ref": ref_sha[str(ref)], "model": model,
-                           "engine": engine, "lang": self.s.config.languages.target, "exag": exag, "cfg": tts.cfg_weight}
+                           "engine": engine, "lang": self.s.config.languages.target, "exag": exag, "cfg": cfg}
                 item = self.s.item("tts", payload, f"line:{ln['segment_id']}:{variant}")
                 jobs[f"{ln['segment_id']}|{variant}"] = (item, {
                     "text": text, "ref": str(ref), "ref_text": self.prod.voice_design.reference_text,
-                    "exaggeration": exag, "cfg_weight": tts.cfg_weight}, voice["voice_id"])
+                    "exaggeration": exag, "cfg_weight": cfg}, voice["voice_id"])
         todo = [(k, v) for k, v in jobs.items() if not v[0].done]
         if todo:
             log.info("TTS (%s): %d lines (%d cached)", engine, len(todo), len(jobs) - len(todo))
@@ -615,6 +668,9 @@ class Producer:
             data, _ = sf.read(ln["audio_path"], dtype="float32")
             if data.ndim > 1:
                 data = data.mean(axis=1)
+            gain = (self.audio_direction.get(ln["segment_id"]) or {}).get("gain", 1.0)
+            if gain != 1.0:
+                data = data * float(gain)
             start = int(ln["out_start"] * rate)
             end = start + len(data)
             if ln.get("out_clip_end") is not None:  # trailer: never bleed into the next clip
@@ -1019,7 +1075,8 @@ class Producer:
         if not clips:
             raise StageFailure(f"{self.scope}: nothing to produce (empty edit list)")
         total = sum(c.seconds for c in clips)
-        placed = place_lines(lines, clips, confine=self.sample)
+        placed = [self.delivery.apply_timing(ln, ln.get("direction") or {}) if self.emotion_aware else ln
+                  for ln in place_lines(lines, clips, confine=self.sample)]
         log.info("%s: %d clips, %.1fs, %d lines", self.scope, len(clips), total, len(placed))
 
         fitted = self.fit_lines(placed, self.synthesize(placed))
@@ -1119,6 +1176,8 @@ class Producer:
         if statuses.get("fallback_source"):
             quality["recommendations"].append("some shots fell back to source footage; check worker_wan logs")
         s.put_json(f"{self.prefix}quality_report.json", quality)
+        if self.sample:
+            self.adaptation_reports(fitted, o.get("tts_back_transcription") or {})
         s.put_json(f"{self.prefix}{'trailer_timeline.json' if self.sample else 'production_timeline.json'}", timeline)
 
         gpu = self.gpu_name()
@@ -1171,6 +1230,71 @@ class Producer:
         s.put_json(f"{self.prefix}production_summary.json", summary)
         self.export()
 
+    def adaptation_reports(self, fitted: list[dict], asr_check: dict[str, Any]) -> None:
+        """Screenplay review (original vs adapted, side by side) and audio performance report for the trailer."""
+        s = self.s
+        identity = {c["character_id"]: c for c in s.dep_json("character_identity", "character_identity.json")["characters"]}
+        scenes = {sc["scene_id"]: sc for sc in s.dep_json("scene_analysis", "scenes.json")["scenes"]}
+        sq = s.dep_json("localization", "screenplay_quality.json")
+        scene_scores = {r["scene_id"]: r for r in sq.get("scenes", [])}
+        cer = (asr_check or {}).get("per_line", {})
+        rows, audio = [], []
+        for ln in fitted:
+            sc = scenes.get(ln.get("scene_id") or "", {})
+            who = identity.get(ln.get("character_id") or "", {})
+            controls = self.audio_direction.get(ln["segment_id"], {})
+            rows.append({
+                "segment_id": ln["segment_id"], "time_s": ln["start_s"], "scene_id": ln.get("scene_id"),
+                "scene_mood": sc.get("mood"), "scene_summary": sc.get("summary"),
+                "location": (sc.get("location_plan") or {}).get("setting"),
+                "real_places_allowed": [p for p in [(sc.get("location_plan") or {}).get("real_place"),
+                                                    *(sc.get("location_plan") or {}).get("destinations", [])] if p],
+                "character": who.get("full_name") or ln.get("character_name"),
+                "accent": (who.get("language_profile") or {}).get("accent"),
+                "dialect_intensity": (who.get("language_profile") or {}).get("dialect_intensity"),
+                "original": ln.get("source_text"), "meaning_en": ln.get("meaning_en"), "adapted": ln.get("target_text"),
+                "adapted_roman": ln.get("roman_text"), "spoken": ln.get("spoken_text"), "direction": ln.get("direction"),
+                "quality": ln.get("quality"), "issues": [i.get("flag") for i in ln.get("issues", [])],
+                "naturalness": (ln.get("review") or {}).get("natural"), "versions": ln.get("versions"),
+                "scene_score": (scene_scores.get(ln.get("scene_id") or "") or {}).get("overall"),
+            })
+            audio.append({
+                "segment_id": ln["segment_id"], "character": who.get("full_name"), "placed": ln.get("placed"),
+                "engine": self.tts_engine, "emotion": (ln.get("direction") or {}).get("emotion"),
+                "intensity": (ln.get("direction") or {}).get("intensity"), "controls": controls,
+                "unsupported_direction": controls.get("unsupported", []),
+                "pause_before_s": ln.get("pause_before_applied"), "pause_after_s": ln.get("pause_after_applied"),
+                "variant": ln.get("variant"), "tempo": ln.get("tempo"), "overflow": ln.get("overflow"),
+                "back_transcription_cer": cer.get(ln["segment_id"]),
+            })
+        moods = sorted({r["scene_mood"] for r in rows if r["scene_mood"]})
+        accents = sorted({f"{r['accent']}:{r['dialect_intensity']}" for r in rows if r["accent"]})
+        placed = [a for a in audio if a["placed"]]
+        s.put_json(f"{self.prefix}screenplay_review.json", {"moods_shown": moods, "accents_shown": accents,
+                                              "screenplay_overall": sq.get("overall"), "lines": rows})
+        s.put_json(f"{self.prefix}audio_quality_report.json", {
+            "engine": self.tts_engine, "emotion_aware": self.emotion_aware, "lines": audio,
+            "emotions_shown": sorted({a["emotion"] for a in placed if a["emotion"]}),
+            "lines_with_unsupported_direction": sum(1 for a in placed if a["unsupported_direction"]),
+            "mean_back_transcription_cer": (asr_check or {}).get("mean_cer"),
+            "note": "Chatterbox controls: exaggeration + cfg_weight; all engines: pauses, gain, tempo. Voice breaks, "
+                    "crying, whispering and overlaps are only carried by the text and listed as unsupported."})
+        md = ["# Trailer screenplay review", "", f"Moods shown: {', '.join(moods) or '-'}  ",
+              f"Speaking profiles shown: {', '.join(accents) or '-'}  ",
+              f"Screenplay score (model estimate): {sq.get('overall')}", "",
+              "| time | character (accent) | scene | original | adapted | meaning | direction | quality |",
+              "|---|---|---|---|---|---|---|---|"]
+        for r in rows:
+            d = r["direction"] or {}
+            cell = lambda v: str(v or "").replace("|", "/").replace("\n", " ")  # noqa: E731
+            md.append(f"| {r['time_s']:.1f}s | {cell(r['character'])} ({cell(r['accent'])}) | {cell(r['scene_mood'])} | "
+                      f"{cell(r['original'])} | {cell(r['adapted'])}<br>*{cell(r['adapted_roman'])}* | {cell(r['meaning_en'])} | "
+                      f"{cell(d.get('emotion'))} {cell(d.get('emotion_detail'))}, {cell(d.get('delivery'))} | "
+                      f"{cell(r['quality'])} {cell(', '.join(r['issues']))} |")
+        path = s.workdir / "screenplay_review.md"
+        path.write_text("\n".join(md) + "\n", encoding="utf-8")
+        s.put_file(path, f"{self.prefix}screenplay_review.md")
+
     def export(self) -> None:
         """Copy deliverables into projects/<id>/sample[/<profile>] or projects/<id>/output for easy download."""
         root = self.export_dir
@@ -1196,6 +1320,9 @@ class Producer:
                 shutil.copy2(self.local(r["master"]), refs / f"{gid}_master.png")
                 for name, uri in r["variants"].items():
                     shutil.copy2(self.local(uri), refs / f"{gid}_{name}.png")
+            sheet = self.s.dep_path("character_references", "contact_sheet.jpg", required=False)
+            if sheet and sheet.exists():
+                shutil.copy2(sheet, refs / "contact_sheet.jpg")
         (out / "README.txt").write_text(
             "Generated by the AI video platform (personal learning project, private use).\n", encoding="utf-8")
         log.info("deliverables exported to %s", out)

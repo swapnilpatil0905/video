@@ -88,8 +88,13 @@ class Planner:
         if not spec.model_from:
             return []
         paths = spec.model_from if isinstance(spec.model_from, list) else [spec.model_from]
-        values = [get_config_path(self.loaded, path) for path in paths]
-        return [str(v) for v in values if v]  # optional models (null) are skipped
+        out: list[str] = []
+        for path in paths:  # optional models (null) are skipped; a list is a preference order
+            value = get_config_path(self.loaded, path)
+            for v in (value if isinstance(value, list) else [value]):
+                if v and str(v) not in out:
+                    out.append(str(v))
+        return out
 
     def model_fingerprint(self, spec: StageSpec) -> str:
         return "+".join(self.registry.get(model_id).fingerprint for model_id in self.model_ids(spec))

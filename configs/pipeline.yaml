@@ -198,21 +198,44 @@ stages:
     outputs: [character_designs.json]
     milestone: M4
 
+  - name: character_identity
+    version: "1"
+    description: Indian names, forms of address and a speaking profile (accent, dialect, mixing) per character.
+    depends_on: [character_design, narrative, character_profile]
+    runtime: llm-gpu
+    params_from: [production.llm, localization.character_names, localization.regional_profile, localization.dialect,
+                  localization.writing_style, localization.models]
+    model_from: [localization.models.writer, production.llm.model]
+    outputs: [character_identity.json]
+    milestone: M3
+
+  - name: scene_analysis
+    version: "1"
+    description: Understand every scene first — mood, intentions, relationships, enhancements, location plan.
+    depends_on: [narrative, character_identity, alignment, emotion, speaker_mapping]
+    runtime: llm-gpu
+    params_from: [production.llm, localization.storytelling, localization.regional_profile,
+                  localization.cultural_adaptation, localization.models]
+    model_from: [localization.models.analyzer, production.llm.model]
+    outputs: [scenes.json]
+    milestone: M3
+
   - name: localization
-    version: "2"
-    description: Context-aware Hindi dialogue with shorter variants, emotion and delivery notes.
-    depends_on: [narrative, character_design, alignment, emotion, speaker_mapping]
+    version: "3"
+    description: Indian screenplay adaptation per analysed scene, audio direction per line, quality review + rewrites.
+    depends_on: [scene_analysis, character_identity, character_design, alignment, emotion, speaker_mapping]
     runtime: llm-gpu
     params_from: [production.llm, localization]
-    model_from: [production.llm.model, production.llm.polish_model]
-    outputs: [localized_lines.json]
+    model_from: [localization.models.writer, localization.models.naturalness_reviewer,
+                 localization.models.screenplay_reviewer, production.llm.model, production.llm.polish_model]
+    outputs: [localized_lines.json, screenplay_quality.json, screenplay_versions.json]
     milestone: M3
 
   # ---- assets -------------------------------------------------------------------
   - name: character_references
-    version: "1"
-    description: Master identity image plus pose/expression sheet per replacement character (identity-checked).
-    depends_on: [character_design, face_embedding, face_clustering]
+    version: "2"
+    description: Realistic original faces — identity-aware prompts, N candidates, consenting-cast blends, measured pick, pose sheet.
+    depends_on: [character_design, character_identity, face_embedding, face_clustering]
     runtime: image-gpu
     params_from: production.character_images
     model_from: [production.character_images.model, production.character_images.edit_model]
@@ -220,9 +243,9 @@ stages:
     milestone: M4
 
   - name: voice_design
-    version: "1"
-    description: One original (non-cloned) designed voice per diarized speaker.
-    depends_on: [character_design, speaker_mapping, character_profile]
+    version: "2"
+    description: One original (non-cloned) designed voice per diarized speaker, with the character's regional accent.
+    depends_on: [character_design, speaker_mapping, character_profile, character_identity]
     runtime: audio-gpu
     params_from: [production.voice_design, languages.target]
     model_from: production.voice_design.model
@@ -233,7 +256,8 @@ stages:
   - name: sample_selection
     version: "1"
     description: Characters, scenes and dialogue for the representative trailer.
-    depends_on: [character_profile, narrative, localization, speaker_mapping, active_speaker, shot_detection]
+    depends_on: [character_profile, narrative, localization, speaker_mapping, active_speaker, shot_detection,
+                 scene_analysis, character_identity]
     runtime: cpu
     params_from: [sample, production.selection]
     outputs: [character_selection.json, dialogue_selection.json]
@@ -242,7 +266,7 @@ stages:
   - name: sample_production
     version: "1"
     description: TTS, shot generation, lip-sync, mix, assembly and QA for the trailer.
-    depends_on: [sample_selection, character_references, voice_design, source_separation, localization, character_database, shot_detection, active_speaker, ingest]
+    depends_on: [sample_selection, character_references, voice_design, source_separation, localization, character_database, shot_detection, active_speaker, ingest, character_identity, scene_analysis]
     runtime: generation-gpu
     params_from: [production, sample, rights, video, audio]
     model_from: [production.tts.model, production.video.model, production.lipsync.model]

@@ -1,0 +1,23 @@
+# Regional profile: Telugu-influenced Hindi (characters whose first language is Telugu).
+id: telugu_hindi
+city: null
+country: India
+languages_heard: [Telugu, Hindi, English]
+dialects:
+  telugu_hindi:
+    description: Hindi spoken by Telugu speakers — Telugu words (andi, ra, amma, nanna, anna), "-ga" particles, English mixing.
+    accent_for_voice: "speaks Hindi with a Telugu accent"
+expressions:
+  - {roman: "Andi", devanagari: "अंडी", meaning: "respectful particle (sir/madam)", register: any, min_intensity: 0.3, use: "politeness"}
+  - {roman: "Ra", devanagari: "रा", meaning: "hey (close friend, younger)", register: casual, min_intensity: 0.5, use: "close friends only"}
+  - {roman: "Anna", devanagari: "अन्ना", meaning: "elder brother", register: warm, min_intensity: 0.2, use: "address"}
+naming:
+  conventions: Telugu family names (Reddy, Rao, Naidu, Varma, Chowdary, Goud); fit the story's family.
+  examples_male: [Karthik Reddy, Srinivas Rao, Varun Naidu]
+  examples_female: [Lakshmi Reddy, Sravani Rao, Keerthi Naidu]
+  honorifics: {elder_male: [anna, nanna, mavayya], elder_female: [akka, amma, atthamma], respectful: [garu, andi]}
+culture: {food: [pesarattu, gongura pachadi, biryani], festivals: [Sankranti, Ugadi, Dasara, Bathukamma], everyday: [family WhatsApp groups]}
+zones: {}
+adjacent_zones: []
+locations: []
+rules: [No city database: pair with a city profile (e.g. hyderabad) for place references.]

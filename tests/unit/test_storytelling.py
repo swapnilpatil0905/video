@@ -1,0 +1,139 @@
+from pathlib import Path
+
+import pytest
+
+from video_platform.storytelling import (
+    CreativeReferenceManager, DialogueDurationOptimizer, EmotionAndDeliveryPlanner, IndianNameGenerator,
+    LocationDatabase, ModelSelector, NaturalConversationGenerator, RegionalEnvironmentAdapter,
+    RegionalLanguageProfileManager, ScreenplayEnhancementEngine, ScreenplayQualityEvaluator,
+)
+from video_platform.storytelling.context import DialogueContextAnalyzer, group_scenes
+from video_platform.storytelling.duration import syllables
+
+DIALECT = {"name": "dakhni_urdu", "intensity": 0.65, "english_mixing": 0.45, "urdu_influence": 0.7}
+
+
+@pytest.fixture(scope="module")
+def hyd():
+    return RegionalLanguageProfileManager.load("hyderabad", DIALECT, "natural_hinglish")
+
+
+def test_every_profile_loads_and_zones_are_consistent():
+    root = Path(__file__).resolve().parents[2] / "configs" / "regional_profiles"
+    for path in root.glob("*.yaml"):
+        pm = RegionalLanguageProfileManager.load(path.stem, DIALECT, "natural_hindi")
+        db = LocationDatabase(pm.profile)
+        zones = set(pm.profile.get("zones") or {}) | {"any", "ring", "far"}
+        assert all(p["zone"] in zones for p in db.places), path.name
+        assert pm.dialect_info(), path.name
+
+
+def test_location_relations_and_line_checks(hyd):
+    db = LocationDatabase(hyd.profile)
+    assert db.relation("Gachibowli", "HITEC City") == "near"
+    assert db.relation("Banjara Hills", "Gachibowli") == "adjacent"
+    assert db.relation("Charminar", "Gachibowli") == "far"
+    env = RegionalEnvironmentAdapter(db)
+    plan = env.validate_plan({"setting": "office", "real_place": "HITEC City", "destinations": ["Old City", "Fake Mall"],
+                              "place_references_allowed": True})
+    assert plan["real_place"] == "HITEC City" and plan["destinations"] == ["Old City"] and "Fake Mall" in plan["rejected"]
+    assert env.check_line("Tumhara office HITEC City mein hai na?", plan) == []
+    assert any("unplanned" in i for i in env.check_line("Charminar chalein?", plan))
+    issues = env.check_line("Gachibowli Old City ke paas hai, 10 minute lagenge", {**plan, "destinations": ["Old City", "Gachibowli"]})
+    assert any("not near" in i for i in issues) and any("travel time" in i for i in issues)
+    no_places = env.validate_plan({"setting": "a kitchen", "place_references_allowed": True})
+    assert no_places["place_references_allowed"] is False
+
+
+def test_character_profiles_and_slang(hyd):
+    p = hyd.normalize_character_profile({"accent": "Hyderabadi", "dialect_intensity": 0.9, "english_mixing": "low"})
+    assert p["accent"] == "hyderabadi" and p["english_mixing"] == 0.15
+    assert "Dakhni" in hyd.voice_accent(p) or "Hyderabadi" in hyd.voice_accent(p)
+    assert hyd.slang_density("अरे मियाँ, नक्को यार") >= 2
+    assert hyd.slang_density("चलो, पक्का?") == 0  # pan-Indian words are not dialect markers
+
+
+def test_syllables_and_duration():
+    assert syllables("नमस्ते") == 3
+    assert syllables("क्या") == 1
+    opt = DialogueDurationOptimizer(5.0, 1.12, 0.35)
+    assert opt.check("हाँ", 3.0)["verdict"] == "too_short"
+    assert opt.check("मैं तुमसे पूछ रहा हूँ, यहाँ आए क्यों?", 1.0)["verdict"] == "too_long"
+    assert opt.check("तुम यहाँ क्या कर रहे हो?", 2.2)["verdict"] == "ok"
+    assert opt.budget(2.0) == {"target": 9, "max": 11}
+
+
+def test_names_validation():
+    gen = IndianNameGenerator({}, "Hyderabad", min_distance=0.34)
+    reg = [{"character_id": "A", "given_name": "Arjun", "family_name": "Reddy"},
+           {"character_id": "B", "given_name": "Arjoon", "family_name": "Rao"},
+           {"character_id": "C", "given_name": "Meera", "family_name": "Sharma"}]
+    issues = gen.validate(reg, [{"a": "A", "b": "C", "relation": "elder brother"}])
+    assert any("too similar" in i for i in issues)
+    assert any("family names differ" in i for i in issues)
+    assert not gen.validate(reg[2:], [])
+    # marriage does not require a shared family name
+    assert not [i for i in gen.validate(reg[::2], [{"a": "A", "b": "C", "relation": "wife"}]) if "family" in i]
+
+
+def test_enhancement_never_adds_comedy_to_tragedy():
+    eng = ScreenplayEnhancementEngine({"mode": "creative_adaptation", "enhance_comedy": True, "enhance_tragedy": True,
+                                       "enhance_emotions": True, "avoid_forced_humour": True})
+    sad = eng.plan({"mood": "tragedy", "intensity": 0.9, "enhancement": {"comedy": True}})
+    assert "comedy" not in sad["allowed"] and "tragedy" in sad["allowed"]
+    light = eng.plan({"mood": "neutral", "intensity": 0.3, "enhancement": {"comedy": True}})
+    assert "comedy" in light["allowed"]
+    forced = eng.plan({"mood": "neutral", "intensity": 0.3, "enhancement": {}})
+    assert "comedy" not in forced["allowed"]
+
+
+def test_delivery_mapping():
+    planner = EmotionAndDeliveryPlanner({"max_pause_seconds": 0.8, "conversational_pauses": True})
+    d = planner.normalize({"emotion": "angry but controlled", "intensity": 0.85, "delivery": "controlled_aggressive",
+                           "speaking_rate": 1.05, "pause_before": 0.4, "voice_break": True}, character_id="X", accent="hyderabadi")
+    assert d["emotion"] == "angry" and d["pause_before"] == 0.4
+    c = planner.tts_controls(d, base_cfg=0.5)
+    assert 0.6 < c["exaggeration"] < 1.0 and c["cfg_weight"] < 0.5 and "voice_break" in c["unsupported"]
+    timed = planner.apply_timing({"out_start": 10.0, "available_s": 3.0}, d)
+    assert timed["out_start"] > 10.0 and timed["available_s"] < 3.0
+
+
+def test_scene_grouping_and_analysis_normalize():
+    segs = [{"segment_id": f"S{i}", "start_s": t, "end_s": t + 1.0} for i, t in enumerate([0, 2, 4, 20, 22])]
+    scenes = group_scenes(segs, {s["segment_id"]: "c0" for s in segs}, gap_s=5.0, max_lines=10)
+    assert [len(s["segment_ids"]) for s in scenes] == [3, 2]
+    norm = DialogueContextAnalyzer.normalize({"mood": "Romantic comedy", "intensity": 3}, scenes[0])
+    assert norm["mood"] in ("comedy", "romance") and norm["intensity"] == 1.0
+
+
+def test_originality_and_provenance(tmp_path):
+    (tmp_path / "ref.txt").write_text("this is a very famous line from a film nobody should copy", encoding="utf-8")
+    refs = CreativeReferenceManager({"max_ngram_overlap": 5, "sources": [
+        {"title": "Reference", "kind": "licensed_screenplay", "licence": "personal copy", "path": "ref.txt"}]}, tmp_path)
+    assert refs.originality_issues("he said: a very famous line from a film again")
+    assert not refs.originality_issues("an entirely original sentence")
+    assert refs.provenance()[0]["used_for"] == "originality check only"
+
+
+def test_quality_line_issues(hyd):
+    db = LocationDatabase(hyd.profile)
+    ev = ScreenplayQualityEvaluator(min_score=70, duration=DialogueDurationOptimizer(), environment=RegionalEnvironmentAdapter(db),
+                                    references=CreativeReferenceManager({}, Path(".")), profiles=hyd,
+                                    conversation=NaturalConversationGenerator(), old_names=["Lin Xiao"])
+    line = {"target_text": "अरे मियाँ, नक्को, काइकू, मेरेकू नहीं चाहिए", "roman_text": "Lin Xiao ko bolo",
+            "target_duration_s": 3.0, "direction": {}}
+    flags = {i["flag"] for i in ev.line_issues(line, {"dialect_intensity": 0.1}, {"place_references_allowed": False},
+                                               ["Arjun"])}
+    assert {"excessive_slang", "incorrect_name"} <= flags
+    assert ev.line_needs_rewrite({"issues": [{"flag": "too_long"}]})
+    assert not ev.line_needs_rewrite({"issues": [], "review": {"natural": 40, "applied": True}})
+
+
+def test_model_selector_prefers_what_fits():
+    class Rec:
+        def __init__(self, gb):
+            self.hardware = type("H", (), {"min_vram_gb": gb})()
+    reg = {"big": Rec(80), "small": Rec(24)}
+    sel = ModelSelector({"writer": ["big", "small"]}, {"analyzer": "small"}, reg.__getitem__, gpu_memory_gb=48)
+    assert sel.pick("writer") == "small" and sel.pick("analyzer") == "small"
+    assert ModelSelector({"writer": ["big", "small"]}, {}, reg.__getitem__, 96).pick("writer") == "big"

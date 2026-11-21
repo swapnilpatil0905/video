@@ -1,0 +1,163 @@
+# Regional profile: Lucknow Hindi (Lucknowi tehzeeb).
+id: lucknow
+city: Lucknow
+country: India
+languages_heard:
+- Hindi
+- Urdu
+- Awadhi
+- English
+dialects:
+  lucknowi:
+    description: Polite, Urdu-rich Lucknowi Hindi — "aap", "janab", "farmaiye", "pehle aap"; soft, courteous rhythm.
+    accent_for_voice: speaks refined Hindi-Urdu with a soft Lucknowi accent
+  neutral_hindi:
+    description: Natural Hindi.
+    accent_for_voice: speaks natural Indian Hindi
+expressions:
+- roman: Janab
+  devanagari: जनाब
+  meaning: sir (courteous)
+  register: any
+  min_intensity: 0.3
+  use: polite address
+- roman: Farmaiye
+  devanagari: फ़रमाइए
+  meaning: please say / tell me
+  register: any
+  min_intensity: 0.4
+  use: courteous
+- roman: Miyaan
+  devanagari: मियाँ
+  meaning: mister / my friend
+  register: casual
+  min_intensity: 0.4
+  use: friendly address
+naming:
+  conventions: Lucknow mixes Awadhi Hindu and Muslim families with long Urdu traditions; fit the story's family.
+  examples_male:
+  - Ayaan Rizvi
+  - Aditya Srivastava
+  - Farhan Naqvi
+  - Raghav Mishra
+  examples_female:
+  - Mehr Zaidi
+  - Ananya Tripathi
+  - Alina Rizvi
+  - Pooja Awasthi
+  honorifics:
+    elder_male:
+    - abba
+    - chacha
+    - bhaijaan
+    elder_female:
+    - ammi
+    - aapa
+    - chachi
+    respectful:
+    - janab
+    - huzoor
+    - ji
+culture:
+  food:
+  - kebabs
+  - biryani
+  - malai makhan
+  festivals:
+  - Eid
+  - Diwali
+  - Muharram
+  everyday:
+  - chikankari
+  - old bazaars
+zones:
+  old_city: Chowk, Aminabad, the Imambaras
+  central: Hazratganj, Kaiserbagh, Charbagh
+  trans_gomti: Gomti Nagar, Aliganj, Indira Nagar
+adjacent_zones:
+- - old_city
+  - central
+- - central
+  - trans_gomti
+locations:
+- name: Hazratganj
+  devanagari: हज़रतगंज
+  kind: neighbourhood
+  zone: central
+  tags:
+  - shopping
+  - evening
+  - ganjing
+- name: Aminabad
+  devanagari: अमीनाबाद
+  kind: market
+  zone: old_city
+  tags:
+  - market
+  - food
+  - budget
+- name: Chowk
+  devanagari: चौक
+  kind: market
+  zone: old_city
+  tags:
+  - chikankari
+  - kebabs
+  - heritage
+- name: Bara Imambara
+  devanagari: बड़ा इमामबाड़ा
+  kind: landmark
+  zone: old_city
+  tags:
+  - heritage
+- name: Rumi Darwaza
+  devanagari: रूमी दरवाज़ा
+  kind: landmark
+  zone: old_city
+  tags:
+  - heritage
+- name: Kaiserbagh
+  devanagari: क़ैसरबाग
+  kind: neighbourhood
+  zone: central
+  tags:
+  - heritage
+  - offices
+- name: Charbagh Railway Station
+  devanagari: चारबाग रेलवे स्टेशन
+  kind: transport
+  zone: central
+  tags:
+  - railway
+- name: Gomti Nagar
+  devanagari: गोमती नगर
+  kind: neighbourhood
+  zone: trans_gomti
+  tags:
+  - affluent
+  - residential
+  - malls
+- name: Ambedkar Park
+  devanagari: अंबेडकर पार्क
+  kind: landmark
+  zone: trans_gomti
+  tags:
+  - park
+  - evening
+- name: Gomti riverfront
+  devanagari: गोमती रिवरफ्रंट
+  kind: landmark
+  zone: trans_gomti
+  tags:
+  - river
+  - evening
+  - romance
+- name: a kebab place in Chowk
+  devanagari: चौक की कबाब की दुकान
+  kind: lifestyle
+  zone: old_city
+  tags:
+  - kebabs
+  - family
+rules:
+- Use a real place only when the scene calls for it; no travel times; no invented places presented as real.

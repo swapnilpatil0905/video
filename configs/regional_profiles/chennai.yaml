@@ -1,0 +1,42 @@
+# Regional profile: Chennai (Tamil-influenced Hindi).
+id: chennai
+city: Chennai
+country: India
+languages_heard: [Tamil, English, Hindi, Telugu]
+dialects:
+  chennai_hindi:
+    description: Hindi spoken by Tamil speakers — Tamil words (anna, da, machan, aiyo, seri), English mixing, rhythmic intonation.
+    accent_for_voice: "speaks Hindi with a Tamil accent"
+  neutral_hindi: {description: Natural Hindi., accent_for_voice: "speaks natural Indian Hindi"}
+expressions:
+  - {roman: "Aiyo", devanagari: "अय्यो", meaning: "oh no!", register: any, min_intensity: 0.3, use: "surprise, dismay"}
+  - {roman: "Machan", devanagari: "मचान", meaning: "buddy", register: casual, min_intensity: 0.5, use: "close friends"}
+  - {roman: "Seri", devanagari: "सरी", meaning: "okay", register: casual, min_intensity: 0.5, use: "agreement"}
+  - {roman: "Anna", devanagari: "अन्ना", meaning: "elder brother", register: warm, min_intensity: 0.2, use: "address"}
+naming:
+  conventions: Tamil families often use initials or a father's name instead of a surname; Telugu, Malayali, Muslim and Christian families too.
+  examples_male: [Karthik Subramanian, Arun Kumar, Imran Basha, Vignesh Raman]
+  examples_female: [Meenakshi Iyer, Priya Raman, Nazreen Banu, Divya Lakshmi]
+  honorifics: {elder_male: [anna, appa, mama], elder_female: [akka, amma, paati], respectful: [sir, saar, madam]}
+culture: {food: [filter coffee, idli, dosa, sambar, biryani], festivals: [Pongal, Deepavali, Karthigai Deepam], everyday: [Marina evening walks, cinema fandom, humidity]}
+zones: {north: "George Town, Parrys, Royapuram", central: "Egmont, Triplicane, Mylapore, T. Nagar, Anna Salai", south: "Adyar, Besant Nagar, Guindy, Velachery", omr: "OMR IT corridor", west: "Anna Nagar, Vadapalani, Koyambedu", airport: "Chennai Airport (Meenambakkam)"}
+adjacent_zones: [[north, central], [central, south], [central, west], [south, omr], [west, south], [south, airport], [west, airport]]
+locations:
+  - {name: Marina Beach, devanagari: मरीना बीच, kind: landmark, zone: central, tags: [beach, evening, family]}
+  - {name: Besant Nagar Beach, devanagari: बेसेंट नगर बीच, kind: landmark, zone: south, tags: [beach, romance, cafes]}
+  - {name: Mylapore, devanagari: मायलापुर, kind: neighbourhood, zone: central, tags: [traditional, temples]}
+  - {name: Kapaleeshwarar Temple, devanagari: कपालीश्वरर मंदिर, kind: landmark, zone: central, tags: [temple, religious]}
+  - {name: T. Nagar, devanagari: टी नगर, kind: neighbourhood, zone: central, tags: [shopping, crowded, jewellery]}
+  - {name: Pondy Bazaar, devanagari: पांडी बाज़ार, kind: market, zone: central, tags: [street_shopping]}
+  - {name: George Town, devanagari: जॉर्ज टाउन, kind: neighbourhood, zone: north, tags: [wholesale, heritage]}
+  - {name: Adyar, devanagari: अड्यार, kind: neighbourhood, zone: south, tags: [residential, affluent]}
+  - {name: Velachery, devanagari: वेलाचेरी, kind: neighbourhood, zone: south, tags: [residential, malls]}
+  - {name: Anna Nagar, devanagari: अन्ना नगर, kind: neighbourhood, zone: west, tags: [residential, affluent]}
+  - {name: OMR, devanagari: ओएमआर, kind: road, zone: omr, tags: [it_corridor, offices]}
+  - {name: Sholinganallur, devanagari: शोलिंगनल्लूर, kind: neighbourhood, zone: omr, tags: [it_professionals]}
+  - {name: Chennai Central, devanagari: चेन्नई सेंट्रल, kind: transport, zone: north, tags: [railway]}
+  - {name: Koyambedu Bus Terminus, devanagari: कोयम्बेडु बस टर्मिनस, kind: transport, zone: west, tags: [bus, market]}
+  - {name: ECR, devanagari: ईसीआर, kind: road, zone: south, tags: [drive, beach_road]}
+  - {name: Chennai Airport, devanagari: चेन्नई एयरपोर्ट, kind: transport, zone: airport, tags: [airport, travel]}
+  - {name: a filter coffee stall, devanagari: फ़िल्टर कॉफ़ी की दुकान, kind: lifestyle, zone: any, tags: [coffee, morning]}
+rules: [Use a real place only when the scene calls for it; no travel times; no invented places presented as real.]

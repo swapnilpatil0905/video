@@ -1,0 +1,39 @@
+# Regional profile: Pune (Marathi-influenced Hindi).
+id: pune
+city: Pune
+country: India
+languages_heard: [Marathi, Hindi, English]
+dialects:
+  pune_hindi:
+    description: Hindi with Marathi colour — "re", "kay", "bara", "ho na", direct and witty.
+    accent_for_voice: "speaks Hindi with a light Marathi accent"
+  neutral_hindi: {description: Natural Hindi., accent_for_voice: "speaks natural Indian Hindi"}
+expressions:
+  - {roman: "Kay re?", devanagari: "काय रे?", meaning: "what's up?", register: casual, min_intensity: 0.5, use: "friends"}
+  - {roman: "Bara", devanagari: "बरं", meaning: "okay / fine", register: casual, min_intensity: 0.5, use: "agreement"}
+  - {roman: "Chal na re", devanagari: "चल ना रे", meaning: "come on", register: casual, min_intensity: 0.3, use: "urging"}
+naming:
+  conventions: Marathi families (Kulkarni, Deshpande, Patil, Joshi, Pawar, Jadhav) plus families from everywhere for IT and students.
+  examples_male: [Aniket Kulkarni, Siddharth Deshpande, Rohit Pawar]
+  examples_female: [Gauri Joshi, Mrunal Patil, Sayali Jadhav]
+  honorifics: {elder_male: [dada, baba, kaka], elder_female: [tai, aai, mavshi], respectful: [saheb, ji]}
+culture: {food: [misal pav, vada pav, puran poli, bakarwadi], festivals: [Ganesh Chaturthi, Gudi Padwa, Diwali], everyday: [two-wheelers, students, IT parks]}
+zones: {peth: "old city peths", central: "Deccan, FC Road, JM Road, Camp", west: "Kothrud, Baner, Aundh", it_west: "Hinjewadi", east: "Koregaon Park, Viman Nagar, Kharadi, Hadapsar"}
+adjacent_zones: [[peth, central], [central, west], [central, east], [west, it_west], [peth, east]]
+locations:
+  - {name: Shaniwar Wada, devanagari: शनिवार वाड़ा, kind: landmark, zone: peth, tags: [heritage]}
+  - {name: Dagdusheth Ganpati, devanagari: दगडूशेठ गणपति, kind: landmark, zone: peth, tags: [temple, festival]}
+  - {name: Laxmi Road, devanagari: लक्ष्मी रोड, kind: market, zone: peth, tags: [shopping, wedding_shopping]}
+  - {name: FC Road, devanagari: एफसी रोड, kind: road, zone: central, tags: [students, cafes, street_shopping]}
+  - {name: JM Road, devanagari: जेएम रोड, kind: road, zone: central, tags: [restaurants]}
+  - {name: Camp, devanagari: कैंप, kind: neighbourhood, zone: central, tags: [shopping, irani_cafes, cantonment]}
+  - {name: Koregaon Park, devanagari: कोरेगांव पार्क, kind: neighbourhood, zone: east, tags: [affluent, cafes, nightlife]}
+  - {name: Viman Nagar, devanagari: विमान नगर, kind: neighbourhood, zone: east, tags: [residential, malls, airport_area]}
+  - {name: Kharadi, devanagari: खराडी, kind: neighbourhood, zone: east, tags: [it_professionals]}
+  - {name: Kothrud, devanagari: कोथरूड, kind: neighbourhood, zone: west, tags: [middle_class, residential]}
+  - {name: Baner, devanagari: बानेर, kind: neighbourhood, zone: west, tags: [apartments, it_professionals]}
+  - {name: Hinjewadi, devanagari: हिंजवडी, kind: neighbourhood, zone: it_west, tags: [it_professionals, traffic]}
+  - {name: Pune Station, devanagari: पुणे स्टेशन, kind: transport, zone: central, tags: [railway]}
+  - {name: Sinhagad Fort, devanagari: सिंहगढ़ किला, kind: landmark, zone: far, tags: [trek, monsoon, outing]}
+  - {name: an Irani café in Camp, devanagari: कैंप का ईरानी कैफ़े, kind: lifestyle, zone: central, tags: [chai, bun_maska]}
+rules: [Use a real place only when the scene calls for it; no travel times; no invented places presented as real.]

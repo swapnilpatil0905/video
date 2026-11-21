@@ -52,3 +52,9 @@ cloud-pilot-mcp.log
 verification_report/
 dist/
 /video/
+
+# personal cast photos + consent (never committed)
+/cast/
+
+# passphrase for data/cast_photos.zip.enc (never committed)
+.cast_passphrase

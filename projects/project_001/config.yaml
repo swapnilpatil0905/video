@@ -20,6 +20,51 @@ localization:
   natural_dialogue: true
   generate_subtitles: true
   register: colloquial                    # avoid textbook Hindi
+  # Indian story adaptation (docs/specs/indian-story-adaptation.md)
+  country: India
+  language: Hindi
+  writing_style: natural_hinglish
+  regional_profile: hyderabad             # configs/regional_profiles/hyderabad.yaml (places, dialect, names)
+  dialect:
+    name: dakhni_urdu
+    intensity: 0.65
+    english_mixing: 0.45
+    urdu_influence: 0.70
+    forced_slang: false
+  character_names:
+    mode: culturally_adaptive
+    region: Hyderabad
+    preserve_relationships: true
+  storytelling:
+    mode: creative_adaptation
+    enhance_emotions: true
+    enhance_comedy: true
+    enhance_romance: true
+    enhance_suspense: true
+    enhance_tragedy: true
+    preserve_story_logic: true
+    preserve_character_motivations: true
+    avoid_forced_humour: true
+  audio:
+    natural_delivery: true
+    emotion_aware_tts: true
+    conversational_pauses: true
+    character_voice_consistency: true
+    regional_pronunciation: true
+  creative_references:
+    enabled: true
+    learn_storytelling_techniques: true
+    allow_dialogue_copying: false
+    allow_scene_copying: false
+    require_original_expression: true
+  models:                                 # per role; null = production.llm.model / polish_model
+    analyzer: qwen3-32b
+    writer: qwen3-32b
+    naturalness_reviewer: sarvam-m
+    screenplay_reviewer: qwen3-32b
+  quality:
+    min_score: 70
+    max_rewrite_rounds: 1
 
 creative:
   visual_style: photorealistic_cinematic

@@ -1,0 +1,41 @@
+# Regional profile: Kolkata (Bengali-influenced Hindi).
+id: kolkata
+city: Kolkata
+country: India
+languages_heard: [Bengali, Hindi, English, Urdu]
+dialects:
+  kolkata_hindi:
+    description: Hindi with Bengali colour — "dada", "didi", "ki holo", "achha", softened consonants, warm and argumentative adda style.
+    accent_for_voice: "speaks Hindi with a soft Bengali accent"
+  neutral_hindi: {description: Natural Hindi., accent_for_voice: "speaks natural Indian Hindi"}
+expressions:
+  - {roman: "Dada", devanagari: "दादा", meaning: "elder brother / respected man", register: warm, min_intensity: 0.2, use: "address"}
+  - {roman: "Ki holo?", devanagari: "की होलो?", meaning: "what happened?", register: casual, min_intensity: 0.5, use: "concern or curiosity"}
+  - {roman: "Darun", devanagari: "दारुण", meaning: "wonderful", register: casual, min_intensity: 0.5, use: "praise"}
+  - {roman: "Adda", devanagari: "अड्डा", meaning: "long chat with friends", register: casual, min_intensity: 0.3, use: "hanging out"}
+naming:
+  conventions: Bengali Hindu and Muslim families, Marwari and Bihari families, Anglo-Indian and Chinese communities; fit the story's family.
+  examples_male: [Arindam Sen, Rohit Banerjee, Saif Ahmed, Abhik Ghosh]
+  examples_female: [Riya Chatterjee, Mitali Das, Ayesha Khan, Sohini Bose]
+  honorifics: {elder_male: [dada, baba, kaku], elder_female: [didi, maa, mashi], respectful: [babu, ji]}
+culture: {food: [phuchka, kathi roll, mishti doi, rosogolla, biryani with potato], festivals: [Durga Puja, Kali Puja, Eid, Poila Boishakh], everyday: [trams, yellow taxis, adda, football]}
+zones: {north: "Shyambazar, Bagbazar, Kumartuli", central: "Esplanade, Park Street, BBD Bagh, College Street, Maidan", south: "Gariahat, Ballygunge, Kalighat, Jadavpur", east: "Salt Lake, New Town", howrah: "Howrah"}
+adjacent_zones: [[north, central], [central, south], [central, east], [central, howrah], [south, east], [north, howrah]]
+locations:
+  - {name: Howrah Bridge, devanagari: हावड़ा ब्रिज, kind: landmark, zone: howrah, tags: [river, heritage, crowded]}
+  - {name: Howrah Station, devanagari: हावड़ा स्टेशन, kind: transport, zone: howrah, tags: [railway, crowded]}
+  - {name: Victoria Memorial, devanagari: विक्टोरिया मेमोरियल, kind: landmark, zone: central, tags: [heritage, romance, evening]}
+  - {name: Park Street, devanagari: पार्क स्ट्रीट, kind: road, zone: central, tags: [restaurants, christmas, nightlife]}
+  - {name: College Street, devanagari: कॉलेज स्ट्रीट, kind: market, zone: central, tags: [books, students, coffee_house]}
+  - {name: Esplanade, devanagari: एस्प्लेनेड, kind: neighbourhood, zone: central, tags: [shopping, trams, metro]}
+  - {name: New Market, devanagari: न्यू मार्केट, kind: market, zone: central, tags: [shopping]}
+  - {name: Princep Ghat, devanagari: प्रिंसेप घाट, kind: landmark, zone: central, tags: [river, romance, evening]}
+  - {name: Kumartuli, devanagari: कुमारटुली, kind: neighbourhood, zone: north, tags: [idol_makers, durga_puja]}
+  - {name: Gariahat, devanagari: गड़ियाहाट, kind: market, zone: south, tags: [shopping, middle_class]}
+  - {name: Kalighat, devanagari: कालीघाट, kind: landmark, zone: south, tags: [temple, religious]}
+  - {name: Jadavpur, devanagari: जादवपुर, kind: neighbourhood, zone: south, tags: [students, university]}
+  - {name: Salt Lake Sector V, devanagari: साल्ट लेक सेक्टर फ़ाइव, kind: neighbourhood, zone: east, tags: [it_professionals, offices]}
+  - {name: New Town, devanagari: न्यू टाउन, kind: neighbourhood, zone: east, tags: [new_development, apartments]}
+  - {name: Eco Park, devanagari: इको पार्क, kind: landmark, zone: east, tags: [park, family]}
+  - {name: a phuchka stall, devanagari: फुचका वाला, kind: lifestyle, zone: any, tags: [street_food, friends]}
+rules: [Use a real place only when the scene calls for it; no travel times; no invented places presented as real.]

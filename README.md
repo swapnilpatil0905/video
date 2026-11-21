@@ -4,6 +4,8 @@ This is a personal self-improvement learning project. It is a reusable, config-d
 
 - Architecture and plan: [`docs/specs/platform-technical-proposal.md`](docs/specs/platform-technical-proposal.md)
 - Approval workflow: [`docs/specs/email-approval-workflow.md`](docs/specs/email-approval-workflow.md)
+- Indian story adaptation (names, regional dialogue, Hyderabad/Dakhni, places, emotion-aware voices): [`docs/specs/indian-story-adaptation.md`](docs/specs/indian-story-adaptation.md)
+- Realistic faces and personal cast (consenting people only): [`docs/specs/character-faces-and-cast.md`](docs/specs/character-faces-and-cast.md)
 - Milestone reports: [`docs/milestones/`](docs/milestones/)
 
 ## Rules this repo follows
@@ -27,6 +29,7 @@ cat > .env <<'EOF'
 HF_TOKEN=hf_xxx
 NOTIFY_EMAIL=swapnil.patil.mail@gmail.com
 VP_GPU_PRICE_PER_HOUR=1.015
+CAST_PASSPHRASE=paste-from-.cast_passphrase-on-your-Mac
 EOF
 bash start.sh notify-test
 nohup bash start.sh > /workspace/run.log 2>&1 &
@@ -34,6 +37,7 @@ nohup bash start.sh > /workspace/run.log 2>&1 &
 
 - **`git clone`** also downloads `data/video-data.zip` (source video + existing analysis) through Git LFS.
 - **`.env`:** replace `hf_xxx` with your Hugging Face token, and `1.015` with the hourly price you rented at. The file stays on the machine and is never committed.
+- **`CAST_PASSPHRASE`:** unlocks `data/cast_photos.zip.enc` (your encrypted face photos) on the machine; without it the leads get fully synthetic faces.
 - **`bash start.sh notify-test`:** sends a test email within seconds.
 - **The last line** starts the trailer in the background. Follow it with `tail -f /workspace/run.log`. You get an email when the trailer is ready, or if anything fails.
 - **Results** are in `projects/project_001/sample/`. Download them, then destroy the instance.

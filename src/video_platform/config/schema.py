@@ -77,6 +77,89 @@ class Languages(StrictModel):
     target_region: str | None = None
 
 
+class DialectSpec(StrictModel):
+    name: str = Field(default="neutral_hindi", description="dialect id inside the regional profile, e.g. dakhni_urdu")
+    intensity: float = Field(default=0.5, ge=0, le=1, description="project default; each character varies around it")
+    english_mixing: float = Field(default=0.3, ge=0, le=1)
+    urdu_influence: float = Field(default=0.3, ge=0, le=1)
+    forced_slang: bool = Field(default=False, description="false = regional expressions only where they fit")
+
+
+class CharacterNamesSpec(StrictModel):
+    mode: Literal["culturally_adaptive", "keep_design_names"] = "culturally_adaptive"
+    region: str | None = Field(default=None, description="naming conventions; defaults to localization.regional_profile")
+    preserve_relationships: bool = True
+    min_name_distance: float = Field(default=0.34, ge=0, le=1, description="reject names this similar (0 = identical)")
+
+
+class StorytellingSpec(StrictModel):
+    mode: Literal["creative_adaptation", "faithful_localization"] = "creative_adaptation"
+    enhance_emotions: bool = True
+    enhance_comedy: bool = True
+    enhance_romance: bool = True
+    enhance_suspense: bool = True
+    enhance_tragedy: bool = True
+    preserve_story_logic: bool = True
+    preserve_character_motivations: bool = True
+    avoid_forced_humour: bool = True
+    scene_gap_seconds: float = Field(default=5.0, gt=0, description="a silence this long starts a new scene")
+    scene_max_lines: int = Field(default=24, ge=4, le=60)
+
+
+class AdaptationAudioSpec(StrictModel):
+    natural_delivery: bool = True
+    emotion_aware_tts: bool = True
+    conversational_pauses: bool = True
+    character_voice_consistency: bool = True
+    regional_pronunciation: bool = True
+    max_pause_seconds: float = Field(default=0.8, ge=0, le=3)
+
+
+class ReferenceSource(StrictModel):
+    title: str
+    kind: Literal["public_domain", "licensed_book", "licensed_screenplay", "film", "tv_drama", "dubbed_film",
+                  "regional_cinema", "original_example", "education"]
+    licence: str = Field(description="public domain / licence name / 'viewed for technique study only'")
+    path: str | None = Field(default=None, description="optional local text you have rights to; used ONLY for the "
+                             "originality check (never sent to a model)")
+    notes: str = ""
+
+
+class CreativeReferencesSpec(StrictModel):
+    enabled: bool = True
+    learn_storytelling_techniques: bool = True
+    allow_dialogue_copying: bool = False
+    allow_scene_copying: bool = False
+    require_original_expression: bool = True
+    max_ngram_overlap: int = Field(default=6, ge=3, le=20, description="flag a line sharing this many consecutive words")
+    sources: list[ReferenceSource] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _no_copying(self) -> "CreativeReferencesSpec":
+        if self.allow_dialogue_copying or self.allow_scene_copying or not self.require_original_expression:
+            raise ValueError("creative_references: copying dialogue or scenes is not supported; references are for "
+                             "general storytelling techniques only (set allow_*_copying: false, "
+                             "require_original_expression: true)")
+        return self
+
+
+class AdaptationModels(StrictModel):
+    """Model per role. A list = preference order; the first that fits the GPU is used. null = production.llm.*"""
+    analyzer: list[str] | str | None = None
+    writer: list[str] | str | None = None
+    naturalness_reviewer: list[str] | str | None = None
+    screenplay_reviewer: list[str] | str | None = None
+
+
+class QualitySpec(StrictModel):
+    min_score: int = Field(default=70, ge=0, le=100, description="scenes/lines below this are rewritten")
+    max_rewrite_rounds: int = Field(default=1, ge=0, le=4)
+    syllables_per_second: float = Field(default=5.0, gt=1, description="natural Hindi speaking rate for timing")
+    max_speedup: float = Field(default=1.12, ge=1, le=1.5, description="beyond this a line is 'too long' and rewritten")
+    min_fill: float = Field(default=0.35, ge=0, le=1, description="below this share of the slot a line is 'too short'")
+    final_naturalness_check: bool = True
+
+
 class Localization(StrictModel):
     preserve_story: bool = True
     cultural_adaptation: bool = True
@@ -88,6 +171,18 @@ class Localization(StrictModel):
     batch_lines: int = Field(
         default=12, ge=3, le=60, description="lines per translation/polish prompt (keeps the JSON answer within max tokens)")
     max_tokens: int = Field(default=8192, ge=512, description="answer budget for translation/polish prompts")
+    # ---- Indian story adaptation (docs/specs/indian-story-adaptation.md) ----
+    country: str = "India"
+    language: str = "Hindi"
+    writing_style: Literal["natural_hindi", "natural_hinglish", "formal_hindi", "dakhni"] = "natural_hindi"
+    regional_profile: str = Field(default="neutral_hindi", description="configs/regional_profiles/<name>.yaml")
+    dialect: DialectSpec = Field(default_factory=DialectSpec)
+    character_names: CharacterNamesSpec = Field(default_factory=CharacterNamesSpec)
+    storytelling: StorytellingSpec = Field(default_factory=StorytellingSpec)
+    audio: AdaptationAudioSpec = Field(default_factory=AdaptationAudioSpec)
+    creative_references: CreativeReferencesSpec = Field(default_factory=CreativeReferencesSpec)
+    models: AdaptationModels = Field(default_factory=AdaptationModels)
+    quality: QualitySpec = Field(default_factory=QualitySpec)
 
 
 class Creative(StrictModel):
@@ -160,6 +255,10 @@ class SampleSpec(StrictModel):
     visual_quality: Literal["preview", "balanced", "high", "max"] = "balanced"
     human_approval_required: bool = True
     spoiler_policy: Literal["avoid_major_twists", "allow"] = "avoid_major_twists"
+    showcase_moods: list[str] = Field(
+        default_factory=lambda: ["tragedy|emotional|family_drama", "comedy", "confrontation", "romance|suspense|thriller"],
+        description="the trailer includes one line from a scene of each group, when the source has one")
+    showcase_min_accents: int = Field(default=2, ge=0, le=5, description="distinct character speaking profiles to show")
     compare_profiles: list[str] = Field(
         default_factory=lambda: ["high", "balanced"],
         description="Produce one trailer per production profile so quality vs cost can be compared side by side")
@@ -408,6 +507,60 @@ _DEFAULT_VARIANTS = {
 }
 
 
+class CastPhoto(StrictModel):
+    path: str = Field(description="relative to the project directory, e.g. input/cast/me_1.jpg (gitignored)")
+    face: Literal["auto", "largest", "left", "right", "only"] = Field(
+        default="auto", description="auto = the face that matches this person's other photos (group photos); "
+        "or left/right/largest")
+    sha256: str | None = Field(default=None, description="filled in automatically; new photos re-run the faces")
+
+
+class CastConsent(StrictModel):
+    given_by: str = Field(description="who agreed, e.g. 'Swapnil (self)' or 'spouse'")
+    date: str
+    scope: str = "personal, private, non-commercial learning project; output not published"
+
+
+class CastMember(StrictModel):
+    """A real, consenting person whose face shapes one character (blend = a new person who resembles them)."""
+    name: str
+    photos: list[CastPhoto] = Field(min_length=1)
+    character: str = Field(description="lead_male | lead_female | a character id such as SRC_CHAR_0080")
+    mode: Literal["blend", "as_is"] = "blend"
+    similarity: tuple[float, float] = Field(
+        default=(0.30, 0.55), description="blend: ArcFace similarity to the person's photos must fall in this range "
+        "(clearly related, not identical). as_is uses only the lower bound (default raised to 0.55).")
+    consent: CastConsent
+
+    @model_validator(mode="after")
+    def _check(self) -> "CastMember":
+        lo, hi = self.similarity
+        if not 0 <= lo < hi <= 1:
+            raise ValueError("cast similarity must be 0 <= low < high <= 1")
+        for photo in self.photos:
+            if "://" in photo.path:
+                raise ValueError("cast photos must be local files (never URLs)")
+        return self
+
+
+class AppearanceSpec(StrictModel):
+    """Look applied to generated characters (kept natural: real people, not retouched models)."""
+    apply_to: Literal["all", "leads", "none"] = "all"
+    build: str = "slim, fit build"
+    look: str = Field(default="good-looking and attractive in a natural way, like a film actor on set without heavy makeup",
+                      description="kept natural: the realism rules still apply")
+    blend_note: str = "slimmer face and a defined jawline; keep the family resemblance"
+
+
+class CastFolders(StrictModel):
+    """Photo folders, one per person, discovered in <repo>/input/ and <project>/input/ (both gitignored)."""
+    enabled: bool = True
+    folders: dict[str, str] = Field(default_factory=lambda: {"lead_male": "Male Lead", "lead_female": "Female Lead"},
+                                    description="character → folder name (matched case-insensitively, _ or space)")
+    mode: Literal["blend", "as_is"] = "blend"
+    consent: CastConsent | None = Field(default=None, description="required for folders to be used")
+
+
 class CharacterImageSpec(StrictModel):
     model: str = "qwen-image"
     edit_model: str = "qwen-image-edit-2509"
@@ -417,10 +570,23 @@ class CharacterImageSpec(StrictModel):
     edit_steps: int = Field(default=30, ge=4)
     true_cfg_scale: float = Field(default=4.0, ge=0)
     seed: int = 20261121
+    candidates: int = Field(default=3, ge=1, le=8, description="master portraits per character; the best one is kept")
+    pick: dict[str, int] = Field(default_factory=dict,
+                                 description="manual choice from the contact sheet: {GEN_CHAR_0080: 2} (candidate index)")
     style_suffix: str = (
-        "photorealistic cinematic portrait, natural skin texture, realistic eyes, soft key light, 85mm lens, "
-        "sharp focus, film still"
+        "candid photorealistic photo of a real ordinary person, natural skin texture with visible pores and small "
+        "imperfections, slight facial asymmetry, natural hair with flyaways, realistic eyes with catchlights, "
+        "everyday natural light, shot on a 50mm lens, true-to-life colours, film still, not retouched"
     )
+    negative: str = (
+        "cartoon, anime, illustration, painting, 3d render, cgi, plastic skin, doll, airbrushed, beauty filter, "
+        "flawless skin, perfect symmetry, fashion model, influencer, stock photo, glamour lighting, heavy makeup, "
+        "deformed face, asymmetric eyes, extra fingers, blurry, low quality, watermark, text, celebrity"
+    )
+    cast: list[CastMember] = Field(default_factory=list, description="real consenting people (see RUNBOOK)")
+    use_global_cast: bool = Field(default=True, description="also use cast/cast.yaml (personal, gitignored) in this project")
+    cast_folders: CastFolders = Field(default_factory=CastFolders)
+    appearance: AppearanceSpec = Field(default_factory=AppearanceSpec)
     variants: dict[str, str] = Field(default_factory=lambda: dict(_DEFAULT_VARIANTS))
 
 

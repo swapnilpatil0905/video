@@ -1,0 +1,343 @@
+# Regional profile: Delhi Hindi.
+id: delhi
+city: Delhi
+country: India
+languages_heard:
+- Hindi
+- Punjabi
+- English
+- Urdu
+dialects:
+  dilli_hindi:
+    description: Delhi Hindi — direct, loud warmth, "bhai", "scene kya hai", "tension mat le", Punjabi colour.
+    accent_for_voice: speaks Hindi with a Delhi accent, direct and confident
+  neutral_hindi:
+    description: Natural Hindi with Delhi-style English mixing.
+    accent_for_voice: speaks natural urban Indian Hindi
+expressions:
+- roman: Scene kya hai?
+  devanagari: सीन क्या है?
+  meaning: what's the plan/situation?
+  register: casual
+  min_intensity: 0.4
+  use: friends
+- roman: Tension mat le
+  devanagari: टेंशन मत ले
+  meaning: don't worry
+  register: casual
+  min_intensity: 0.2
+  use: reassurance
+- roman: Bhai sahab
+  devanagari: भाई साहब
+  meaning: sir / brother (respectful)
+  register: any
+  min_intensity: 0.0
+  use: addressing a stranger
+naming:
+  conventions: Delhi mixes Punjabi, Baniya, Jat, Muslim, Bihari and other families; fit the story's family.
+  examples_male:
+  - Kabir Malhotra
+  - Rohan Sethi
+  - Aman Chaudhary
+  - Faizan Qureshi
+  examples_female:
+  - Simran Kapoor
+  - Ishita Gupta
+  - Noor Qureshi
+  - Tanya Bhatia
+  honorifics:
+    elder_male:
+    - bhaiyya
+    - chachu
+    - papa ji
+    elder_female:
+    - didi
+    - mummy
+    - chachi
+    respectful:
+    - ji
+    - uncle ji
+    - aunty ji
+culture:
+  food:
+  - chole bhature
+  - parathas
+  - chaat
+  festivals:
+  - Diwali
+  - Holi
+  - Lohri
+  - Eid
+  everyday:
+  - Delhi Metro
+  - winter fog
+  - shaadi season
+  - autos and e-rickshaws
+zones:
+  old_delhi: Chandni Chowk, Red Fort, Jama Masjid
+  central: Connaught Place, India Gate, Khan Market, Karol Bagh
+  south: Hauz Khas, Saket, Greater Kailash, Lajpat Nagar, Mehrauli
+  north: North Campus, Kamla Nagar, Civil Lines
+  west: Rajouri Garden, Janakpuri, Dwarka
+  east: Laxmi Nagar, Mayur Vihar
+  gurugram: Gurugram (NCR)
+  noida: Noida (NCR)
+  airport: IGI Airport
+adjacent_zones:
+- - old_delhi
+  - central
+- - old_delhi
+  - north
+- - central
+  - south
+- - central
+  - west
+- - central
+  - east
+- - central
+  - north
+- - south
+  - gurugram
+- - west
+  - gurugram
+- - east
+  - noida
+- - south
+  - noida
+- - airport
+  - west
+- - airport
+  - south
+- - airport
+  - gurugram
+locations:
+- name: Chandni Chowk
+  devanagari: चांदनी चौक
+  kind: market
+  zone: old_delhi
+  tags:
+  - heritage
+  - street_food
+  - crowded
+  - wedding_shopping
+- name: Red Fort
+  devanagari: लाल किला
+  kind: landmark
+  zone: old_delhi
+  tags:
+  - heritage
+- name: Jama Masjid
+  devanagari: जामा मस्जिद
+  kind: landmark
+  zone: old_delhi
+  tags:
+  - heritage
+  - religious
+  - ramzan_food
+- name: Paranthe Wali Gali
+  devanagari: पराँठे वाली गली
+  kind: lifestyle
+  zone: old_delhi
+  tags:
+  - street_food
+- name: Connaught Place
+  devanagari: कनॉट प्लेस
+  kind: neighbourhood
+  zone: central
+  tags:
+  - shopping
+  - offices
+  - cafes
+- name: India Gate
+  devanagari: इंडिया गेट
+  kind: landmark
+  zone: central
+  tags:
+  - evening
+  - family
+  - ice_cream
+- name: Khan Market
+  devanagari: ख़ान मार्केट
+  kind: market
+  zone: central
+  tags:
+  - affluent
+  - cafes
+- name: Lodhi Garden
+  devanagari: लोधी गार्डन
+  kind: landmark
+  zone: central
+  tags:
+  - morning_walk
+  - romance
+- name: Karol Bagh
+  devanagari: करोल बाग
+  kind: market
+  zone: central
+  tags:
+  - shopping
+  - middle_class
+- name: Dilli Haat
+  devanagari: दिल्ली हाट
+  kind: lifestyle
+  zone: south
+  tags:
+  - crafts
+  - food
+  - outing
+- name: Hauz Khas Village
+  devanagari: हौज़ ख़ास विलेज
+  kind: neighbourhood
+  zone: south
+  tags:
+  - cafes
+  - nightlife
+  - students
+- name: Saket
+  devanagari: साकेत
+  kind: neighbourhood
+  zone: south
+  tags:
+  - malls
+  - residential
+- name: Greater Kailash
+  devanagari: ग्रेटर कैलाश
+  kind: neighbourhood
+  zone: south
+  tags:
+  - affluent
+  - shopping
+- name: Lajpat Nagar
+  devanagari: लाजपत नगर
+  kind: market
+  zone: south
+  tags:
+  - shopping
+  - middle_class
+- name: Sarojini Nagar Market
+  devanagari: सरोजिनी नगर मार्केट
+  kind: market
+  zone: south
+  tags:
+  - budget_shopping
+  - students
+- name: Qutub Minar
+  devanagari: क़ुतुब मीनार
+  kind: landmark
+  zone: south
+  tags:
+  - heritage
+  - tourist
+- name: North Campus
+  devanagari: नॉर्थ कैंपस
+  kind: neighbourhood
+  zone: north
+  tags:
+  - students
+  - university
+- name: Kamla Nagar
+  devanagari: कमला नगर
+  kind: market
+  zone: north
+  tags:
+  - students
+  - shopping
+- name: Majnu ka Tilla
+  devanagari: मजनू का टीला
+  kind: neighbourhood
+  zone: north
+  tags:
+  - cafes
+  - students
+  - tibetan_food
+- name: Rajouri Garden
+  devanagari: राजौरी गार्डन
+  kind: neighbourhood
+  zone: west
+  tags:
+  - shopping
+  - punjabi_food
+- name: Dwarka
+  devanagari: द्वारका
+  kind: neighbourhood
+  zone: west
+  tags:
+  - residential
+  - middle_class
+- name: Laxmi Nagar
+  devanagari: लक्ष्मी नगर
+  kind: neighbourhood
+  zone: east
+  tags:
+  - students
+  - coaching
+- name: Akshardham
+  devanagari: अक्षरधाम
+  kind: landmark
+  zone: east
+  tags:
+  - religious
+  - tourist
+- name: Cyber City
+  devanagari: साइबर सिटी
+  kind: neighbourhood
+  zone: gurugram
+  tags:
+  - corporate
+  - offices
+  - nightlife
+- name: Noida Sector 18
+  devanagari: नोएडा सेक्टर 18
+  kind: market
+  zone: noida
+  tags:
+  - shopping
+  - malls
+- name: Rajiv Chowk Metro Station
+  devanagari: राजीव चौक मेट्रो स्टेशन
+  kind: metro_station
+  zone: central
+  tags:
+  - interchange
+  - crowded
+- name: Kashmere Gate
+  devanagari: कश्मीरी गेट
+  kind: transport
+  zone: north
+  tags:
+  - metro_interchange
+  - bus_terminal
+- name: New Delhi Railway Station
+  devanagari: नई दिल्ली रेलवे स्टेशन
+  kind: transport
+  zone: central
+  tags:
+  - railway
+- name: IGI Airport
+  devanagari: आईजीआई एयरपोर्ट
+  kind: transport
+  zone: airport
+  tags:
+  - airport
+  - travel
+- name: Ring Road
+  devanagari: रिंग रोड
+  kind: road
+  zone: any
+  tags:
+  - traffic
+- name: DND Flyway
+  devanagari: डीएनडी फ्लाईवे
+  kind: road
+  zone: east
+  tags:
+  - noida_route
+- name: a chai tapri near the metro station
+  devanagari: मेट्रो स्टेशन के पास की चाय की टपरी
+  kind: lifestyle
+  zone: any
+  tags:
+  - chai
+  - commute
+rules:
+- Use a real place only when the scene calls for it; no travel times; no invented places presented as real.

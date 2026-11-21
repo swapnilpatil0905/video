@@ -1,0 +1,25 @@
+# Personal cast — copy to cast/cast.yaml at the repository root (the cast/ folder is gitignored)
+# and put the photos next to it. Used in EVERY project (opt out per project with
+# production.character_images.use_global_cast: false).
+#
+# Photos: 3–5 per person, face towards the camera, daylight, no beauty filter, glasses off if possible.
+# Group photos are fine: say which face is the person (left / right / largest).
+#
+# mode: blend  → each character becomes a NEW realistic person who resembles the cast member
+#                (ArcFace similarity kept inside `similarity`, default 0.30–0.55: related, not identical)
+#      as_is   → the character keeps the cast member's own face (similarity ≥ lower bound)
+cast:
+  - name: me
+    character: lead_male              # lead_male | lead_female | a character id (SRC_CHAR_0080)
+    mode: blend
+    photos:
+      - {path: couple_1.jpg, face: right}
+      - {path: me_2.jpg, face: largest}
+    consent: {given_by: "self", date: "2026-11-21"}
+  - name: wife
+    character: lead_female
+    mode: blend
+    photos:
+      - {path: couple_1.jpg, face: left}
+      - {path: wife_selfie_1.jpg, face: largest}
+    consent: {given_by: "wife (verbal consent, personal private project)", date: "2026-11-21"}

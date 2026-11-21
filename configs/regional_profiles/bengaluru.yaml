@@ -1,0 +1,47 @@
+# Regional profile: Bengaluru (Hindi spoken in Bengaluru, Kannada and English mixing).
+id: bengaluru
+city: Bengaluru
+country: India
+languages_heard: [Kannada, English, Hindi, Tamil, Telugu]
+dialects:
+  bengaluru_hindi:
+    description: Hindi of Bengaluru's mixed population — heavy English mixing, Kannada words (guru, maga, swalpa, maadi, sakkath), relaxed tone.
+    accent_for_voice: "speaks Hindi with a South Indian (Bengaluru) accent and lots of English"
+  neutral_hindi: {description: Natural Hindi with IT-office English mixing., accent_for_voice: "speaks natural urban Indian Hindi"}
+expressions:
+  - {roman: "Swalpa adjust maadi", devanagari: "स्वल्प एडजस्ट माडी", meaning: "please adjust a little", register: comic, min_intensity: 0.5, use: "classic Bengaluru request"}
+  - {roman: "Guru", devanagari: "गुरु", meaning: "buddy", register: casual, min_intensity: 0.4, use: "friends"}
+  - {roman: "Maga", devanagari: "मगा", meaning: "dude (close friend)", register: casual, min_intensity: 0.5, use: "close friends"}
+  - {roman: "Sakkath", devanagari: "सक्कत", meaning: "awesome", register: casual, min_intensity: 0.5, use: "praise"}
+naming:
+  conventions: Kannadiga, Tamil, Telugu, Malayali and North Indian families live side by side; fit the story's family.
+  examples_male: [Karthik Gowda, Arjun Shetty, Rahul Nair, Vivek Hegde]
+  examples_female: [Divya Gowda, Sneha Rao, Ananya Iyer, Kavya Shetty]
+  honorifics: {elder_male: [anna, appa, maava], elder_female: [akka, amma, aunty], respectful: [saar, avare]}
+culture: {food: [filter coffee, masala dosa, idli vada, bisi bele bath], festivals: [Ugadi, Dasara, Diwali, Ganesha], everyday: [traffic, startups, pubs, darshinis]}
+zones: {central: "MG Road, Cubbon Park, Shivajinagar", south: "Jayanagar, JP Nagar, Basavanagudi, Lalbagh", south_east: "Koramangala, HSR Layout, Bellandur, Electronic City", east: "Indiranagar, Marathahalli, Whitefield", north: "Malleshwaram, Hebbal, Yelahanka", airport: "Kempegowda International Airport"}
+adjacent_zones: [[central, south], [central, east], [central, north], [central, south_east], [south, south_east], [south_east, east], [north, airport]]
+locations:
+  - {name: MG Road, devanagari: एमजी रोड, kind: road, zone: central, tags: [shopping, offices, metro]}
+  - {name: Brigade Road, devanagari: ब्रिगेड रोड, kind: road, zone: central, tags: [shopping, nightlife]}
+  - {name: Church Street, devanagari: चर्च स्ट्रीट, kind: road, zone: central, tags: [cafes, pubs, books]}
+  - {name: Cubbon Park, devanagari: कब्बन पार्क, kind: landmark, zone: central, tags: [park, morning_walk, romance]}
+  - {name: Vidhana Soudha, devanagari: विधान सौधा, kind: landmark, zone: central, tags: [government, heritage]}
+  - {name: Commercial Street, devanagari: कमर्शियल स्ट्रीट, kind: market, zone: central, tags: [shopping]}
+  - {name: Lalbagh, devanagari: लालबाग, kind: landmark, zone: south, tags: [park, flower_show, family]}
+  - {name: Jayanagar, devanagari: जयनगर, kind: neighbourhood, zone: south, tags: [residential, middle_class, shopping]}
+  - {name: Basavanagudi, devanagari: बसवनगुडी, kind: neighbourhood, zone: south, tags: [traditional, food_street]}
+  - {name: Koramangala, devanagari: कोरमंगला, kind: neighbourhood, zone: south_east, tags: [startups, cafes, nightlife]}
+  - {name: HSR Layout, devanagari: एचएसआर लेआउट, kind: neighbourhood, zone: south_east, tags: [startups, residential]}
+  - {name: Electronic City, devanagari: इलेक्ट्रॉनिक सिटी, kind: neighbourhood, zone: south_east, tags: [it_professionals, offices]}
+  - {name: Silk Board junction, devanagari: सिल्क बोर्ड जंक्शन, kind: junction, zone: south_east, tags: [traffic]}
+  - {name: Indiranagar, devanagari: इंदिरानगर, kind: neighbourhood, zone: east, tags: [pubs, cafes, affluent]}
+  - {name: Whitefield, devanagari: व्हाइटफ़ील्ड, kind: neighbourhood, zone: east, tags: [it_professionals, apartments]}
+  - {name: Marathahalli, devanagari: मराठाहल्ली, kind: neighbourhood, zone: east, tags: [it_professionals, traffic]}
+  - {name: Malleshwaram, devanagari: मल्लेश्वरम, kind: neighbourhood, zone: north, tags: [traditional, temples, markets]}
+  - {name: Hebbal, devanagari: हेब्बाल, kind: neighbourhood, zone: north, tags: [flyover, lake]}
+  - {name: Outer Ring Road, devanagari: आउटर रिंग रोड, kind: road, zone: any, tags: [traffic, offices]}
+  - {name: Kempegowda Bus Station, devanagari: मैजेस्टिक बस स्टेशन, kind: transport, zone: central, tags: [bus, metro_interchange]}
+  - {name: Kempegowda International Airport, devanagari: बेंगलुरु एयरपोर्ट, kind: transport, zone: airport, tags: [airport, travel]}
+  - {name: a darshini for filter coffee, devanagari: दर्शिनी की फ़िल्टर कॉफ़ी, kind: lifestyle, zone: any, tags: [coffee, breakfast]}
+rules: [Use a real place only when the scene calls for it; no travel times; no invented places presented as real.]

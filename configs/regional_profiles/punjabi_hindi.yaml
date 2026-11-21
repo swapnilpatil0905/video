@@ -1,0 +1,23 @@
+# Regional profile: Punjabi-influenced Hindi (no city database yet).
+id: punjabi_hindi
+city: null
+country: India
+languages_heard: [Hindi, Punjabi, English]
+dialects:
+  punjabi_hindi:
+    description: Hindi with Punjabi warmth — "oye", "chak de", "koi gal nahi", "paaji", loud affection.
+    accent_for_voice: "speaks Hindi with a warm Punjabi accent"
+expressions:
+  - {roman: "Oye", devanagari: "ओए", meaning: "hey!", register: casual, min_intensity: 0.3, use: "calling a friend"}
+  - {roman: "Koi gal nahi", devanagari: "कोई गल नहीं", meaning: "no problem", register: warm, min_intensity: 0.4, use: "reassurance"}
+  - {roman: "Paaji", devanagari: "पाजी", meaning: "elder brother / respected friend", register: warm, min_intensity: 0.3, use: "address"}
+naming:
+  conventions: Punjabi Sikh and Hindu family names; fit the story's family.
+  examples_male: [Harpreet Singh, Karan Gill, Aman Sandhu]
+  examples_female: [Simran Kaur, Jasleen Gill, Noor Sandhu]
+  honorifics: {elder_male: [paaji, chachu, bauji], elder_female: [bhabhi, biji, didi], respectful: [ji, sardar ji]}
+culture: {food: [makki di roti, lassi, chole], festivals: [Baisakhi, Lohri, Diwali, Gurpurab], everyday: [big families, dhabas]}
+zones: {}
+adjacent_zones: []
+locations: []
+rules: [No city database: avoid real place names unless the story names one.]

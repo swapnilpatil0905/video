@@ -105,6 +105,31 @@ To also compare a cheaper `balanced` trailer, set `compare_profiles: [high, bala
 
 Known remaining gaps: [`docs/GAPS.md`](GAPS.md).
 
+## Indian story adaptation (names, Hyderabadi dialogue, places, emotional voices)
+
+Configured under `localization:` in the project config (project_001: Hyderabad, Dakhni Urdu, natural Hinglish). Order: scene analysis → Indian screenplay → quality + timing review → emotion-aware voices → lip-sync. Details: [`docs/specs/indian-story-adaptation.md`](specs/indian-story-adaptation.md).
+
+- Change city: `localization.regional_profile: mumbai` (also `delhi`, `lucknow`, `bengaluru`, `kolkata`, `chennai`, `pune`, `jaipur`, `neutral_hindi`, …). Add a city by copying `configs/regional_profiles/hyderabad.yaml`.
+- Review after the trailer: `sample/screenplay_review.md` (original vs adapted, accent, direction, flags), `sample/audio_quality_report.json`, `screenplay_quality.json`.
+- Changing `localization.*` re-runs only character identity, scene analysis, localization and what depends on them (character images stay cached).
+
+## Personal cast (your faces, blended into new characters, in every project)
+
+Spec: [`docs/specs/character-faces-and-cast.md`](specs/character-faces-and-cast.md). Only people who agreed; never actors or celebrities.
+
+Photos live in `input/Male Lead/` and `input/Female Lead/` (gitignored — never on GitHub). On the Mac they are zipped as `input/cast_photos.zip`. Upload that zip in Jupyter to `/workspace/video/input/`, then:
+
+```bash
+cd /workspace/video/input && python3 -m zipfile -e cast_photos.zip . && ls "Male Lead" "Female Lead"
+```
+
+Group photos are fine (the right face is picked automatically). HEIC: convert to JPEG first (Mac: `sips -s format jpeg IMG.heic --out IMG.jpg`).
+For explicit control instead: `cp configs/cast.example.yaml cast/cast.yaml`.
+
+- Default: blend — the male / female lead become new people who clearly resemble you / your wife (measured similarity 0.30–0.55).
+- After the faces stage: check `sample/character_references/contact_sheet.jpg`. To choose another candidate: `production.character_images.pick: {GEN_CHAR_0080: 2}` in the project config.
+- Replacing photos re-runs only the faces (and the shots that use them).
+
 ## What the run does
 
 The first run goes through these steps:

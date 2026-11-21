@@ -39,3 +39,21 @@ packages:
 
 runtime:
   root: "${VP_RUNTIME_ROOT:-/workspace/vp}"   # per-model environments, repos and weights (scripts/setup_vast.sh)
+
+# Personal cast for EVERY project: one folder of photos per consenting person, in <repo>/input/
+# (gitignored — photos never go to GitHub). "Male Lead" → most important male character, etc.
+# Each character becomes a NEW person who resembles the cast member (blend), slim and good-looking.
+production:
+  character_images:
+    cast_folders:
+      enabled: true
+      folders: {lead_male: "Male Lead", lead_female: "Female Lead"}
+      mode: blend
+      consent:
+        given_by: "project owner (self) and spouse — both agreed"
+        date: "2026-11-21"
+        scope: "personal, private, non-commercial learning project; output not published"
+    appearance:
+      apply_to: all
+      build: "slim, fit build"
+      look: "good-looking and attractive in a natural way, like a film actor on set without heavy makeup"

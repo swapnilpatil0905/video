@@ -156,6 +156,104 @@ class LoadedConfig:
         return self.project_dir / "state"
 
 
+def merge_global_cast(merged: dict[str, Any], root: Path, env: Mapping[str, str]) -> dict[str, Any]:
+    """Add the personal cast (cast/cast.yaml at the platform root, gitignored) to every project.
+
+    A project opts out with production.character_images.use_global_cast: false. Photo paths in the
+    cast file are relative to the cast directory and are made absolute here.
+    """
+    images = merged.setdefault("production", {}).setdefault("character_images", {})
+    if not isinstance(images, dict) or images.get("use_global_cast", True) is False:
+        return merged
+    cast_dir = Path(env.get("VP_CAST_DIR") or (root / "cast"))
+    cast_file = cast_dir / "cast.yaml"
+    if not cast_file.exists():
+        return merged
+    members = (load_yaml(cast_file) or {}).get("cast") or []
+    if not isinstance(members, list):
+        raise ConfigError(f"{cast_file}: 'cast' must be a list")
+    project_names = {m.get("name") for m in images.get("cast") or [] if isinstance(m, dict)}
+    resolved = []
+    for member in members:
+        if not isinstance(member, dict) or member.get("name") in project_names:
+            continue  # a project entry with the same name wins
+        member = deepcopy(member)
+        for photo in member.get("photos") or []:
+            if isinstance(photo, dict) and photo.get("path") and not Path(photo["path"]).is_absolute():
+                photo["path"] = str((cast_dir / photo["path"]).resolve())
+        resolved.append(member)
+    images["cast"] = list(images.get("cast") or []) + resolved
+    return merged
+
+
+PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
+def _norm_folder(name: str) -> str:
+    return name.lower().replace("_", " ").replace("-", " ").strip()
+
+
+def find_cast_photos(folder: Path) -> list[Path]:
+    """Readable photos in a folder (HEIC is skipped when a converted .jpg of the same name exists)."""
+    files = sorted(p for p in folder.iterdir() if p.is_file() and not p.name.startswith("."))
+    stems_with_jpg = {p.stem.lower() for p in files if p.suffix.lower() in PHOTO_SUFFIXES}
+    out = [p for p in files if p.suffix.lower() in PHOTO_SUFFIXES]
+    missing = [p.name for p in files if p.suffix.lower() in (".heic", ".heif") and p.stem.lower() not in stems_with_jpg]
+    if missing:
+        import logging
+
+        logging.getLogger(__name__).warning("cast photos in HEIC format are skipped (convert to JPEG): %s", missing)
+    return out
+
+
+def merge_cast_folders(merged: dict[str, Any], root: Path, project_dir: Path) -> dict[str, Any]:
+    """One folder per consenting person (e.g. input/Male Lead) → a cast entry, in every project."""
+    images = merged.setdefault("production", {}).setdefault("character_images", {})
+    spec = images.get("cast_folders") or {}
+    if not isinstance(images, dict) or spec.get("enabled", True) is False:
+        return merged
+    folders = spec.get("folders") or {"lead_male": "Male Lead", "lead_female": "Female Lead"}
+    taken = {m.get("character") for m in images.get("cast") or [] if isinstance(m, dict)}
+    found = []
+    for character, name in folders.items():
+        if character in taken:
+            continue  # an explicit cast entry wins
+        for base in (project_dir / "input", root / "input"):
+            if not base.is_dir():
+                continue
+            match = next((d for d in base.iterdir() if d.is_dir() and _norm_folder(d.name) == _norm_folder(name)), None)
+            photos = find_cast_photos(match) if match else []
+            if photos:
+                found.append({"name": match.name, "character": character, "mode": spec.get("mode", "blend"),
+                              "photos": [{"path": str(p.resolve()), "face": "auto"} for p in photos],
+                              "consent": spec.get("consent"), "source": f"folder {match}"})
+                break
+    if found:
+        if not spec.get("consent"):
+            raise ConfigError("cast photo folders found (" + ", ".join(f["source"] for f in found) + ") but no consent "
+                              "is recorded: set production.character_images.cast_folders.consent "
+                              "{given_by, date} or cast_folders.enabled: false")
+        for f in found:
+            f.pop("source")
+        images["cast"] = list(images.get("cast") or []) + found
+    return merged
+
+
+def fingerprint_cast_photos(merged: dict[str, Any], project_dir: Path) -> None:
+    """Put each cast photo's sha256 into the config, so replacing a photo re-runs the face stage."""
+    import hashlib
+
+    images = (merged.get("production") or {}).get("character_images") or {}
+    for member in images.get("cast") or [] if isinstance(images, dict) else []:
+        for photo in (member.get("photos") or []) if isinstance(member, dict) else []:
+            if not isinstance(photo, dict) or not photo.get("path"):
+                continue
+            path = Path(photo["path"])
+            path = path if path.is_absolute() else project_dir / path
+            if path.is_file():
+                photo["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def load_project_config(
     config_path: str | Path,
     *,
@@ -172,6 +270,9 @@ def load_project_config(
     base = load_yaml(default_path) if default_path.exists() else {}
     project_raw = load_yaml(config_path)
     merged = deep_merge(base, project_raw)
+    merged = merge_global_cast(merged, root, env)
+    merged = merge_cast_folders(merged, root, config_path.parent)
+    fingerprint_cast_photos(merged, config_path.parent)
 
     if email is not None:
         notifications = merged.setdefault("notifications", {})

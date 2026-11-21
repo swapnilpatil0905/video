@@ -42,7 +42,29 @@ notify_failure() {  # best effort; stdlib-only, works even before setup
         --log "$RUN_LOG" || true
 }
 
+unpack_cast() {  # encrypted personal cast photos (data/cast_photos.zip.enc) → input/Male Lead, input/Female Lead
+    local enc=data/cast_photos.zip.enc
+    [[ -f "$enc" ]] || return 0
+    if [[ -d "input/Male Lead" || -d "input/Female Lead" ]] && [[ ! "$enc" -nt input/.cast_unpacked ]]; then
+        return 0
+    fi
+    if [[ -z "${CAST_PASSPHRASE:-}" ]]; then
+        echo "== cast photos are encrypted: add CAST_PASSPHRASE=... to .env to use them (skipping)"
+        return 0
+    fi
+    mkdir -p input
+    if openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$enc" -out input/.cast_photos.zip -pass env:CAST_PASSPHRASE \
+            2>/dev/null && python3 -m zipfile -e input/.cast_photos.zip input/; then
+        touch input/.cast_unpacked
+        echo "== cast photos unpacked into input/ ($(ls "input/Male Lead" 2>/dev/null | wc -l | tr -d ' ') male, $(ls "input/Female Lead" 2>/dev/null | wc -l | tr -d ' ') female)"
+    else
+        echo "== could not decrypt $enc (wrong CAST_PASSPHRASE?) — continuing without cast photos"
+    fi
+    rm -f input/.cast_photos.zip
+}
+
 setup() {
+    unpack_cast
     bash scripts/setup_vast.sh || { notify_failure "setup failed (see /workspace/vp/logs/setup_*.log)";
                                     echo "Setup failed — fix the reported runtime and re-run: bash start.sh"; exit 1; }
 }

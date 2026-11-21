@@ -1,0 +1,24 @@
+# Regional profile: natural Indian Hindi with no city-specific dialect (the default).
+id: neutral_hindi
+city: null
+country: India
+languages_heard: [Hindi, English]
+dialects:
+  neutral_hindi:
+    description: Natural, conversational standard Hindi; Hinglish as fits each character. No regional markers.
+    accent_for_voice: "speaks natural, neutral Indian Hindi"
+expressions:
+  - {roman: "Arre yaar", devanagari: "अरे यार", meaning: "come on, man", register: casual, min_intensity: 0.0, use: "friends, mild frustration"}
+  - {roman: "Chal na", devanagari: "चल ना", meaning: "come on", register: casual, min_intensity: 0.0, use: "urging a friend"}
+  - {roman: "Pakka", devanagari: "पक्का", meaning: "for sure", register: any, min_intensity: 0.0, use: "promise"}
+naming:
+  conventions: Pan-Indian names that fit each character's family and background in the story; never stereotype.
+  examples_male: [Aarav, Kabir, Rohan, Vikram, Sameer, Aditya]
+  examples_female: [Ananya, Meera, Kavya, Nisha, Sana, Riya]
+  honorifics: {elder_male: [bhaiyya, chacha, papa], elder_female: [didi, maa, chachi], respectful: [ji, sir, madam]}
+culture: {food: [chai, samosa, paratha], festivals: [Diwali, Holi, Eid, Raksha Bandhan], everyday: [auto-rickshaw, local train or metro]}
+zones: {}
+adjacent_zones: []
+locations: []
+rules:
+  - No specific city: avoid real place names unless the story already names a city.

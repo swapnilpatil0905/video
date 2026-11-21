@@ -134,17 +134,36 @@ def embed(request: dict) -> dict:
     return {"count": len(ids), "attributes": attributes}
 
 
+def _pick_face(faces, which: str):
+    """largest | left | right | only (largest, flagged if several)."""
+    faces = [f for f in faces or []]
+    if not faces:
+        return None
+    if which == "left":
+        return min(faces, key=lambda f: (f.bbox[0] + f.bbox[2]) / 2)
+    if which == "right":
+        return max(faces, key=lambda f: (f.bbox[0] + f.bbox[2]) / 2)
+    return _largest(faces)
+
+
 def identity(request: dict) -> dict:
     import cv2
 
     app = _insightface(request.get("det_size", 640))
-    out, ratio = {}, {}
+    out, ratio, score, count, all_faces = {}, {}, {}, {}, {}
     for item in request["images"]:
         image = cv2.imread(item["path"])
-        face = _largest(app.get(image)) if image is not None else None
+        faces = app.get(image) if image is not None else []
+        face = _pick_face(faces, item.get("face", "largest"))
+        count[item["id"]] = len(faces)
+        if item.get("face") == "auto" and image is not None:  # every face: the stage decides which one is the person
+            all_faces.setdefault(item["id"], [
+                {"embedding": f.normed_embedding.astype("float32").tolist(), "det_score": float(f.det_score),
+                 "face_ratio": float((f.bbox[3] - f.bbox[1]) / image.shape[0])} for f in faces])
         out[item["id"]] = face.normed_embedding.astype("float32").tolist() if face is not None else None
         ratio[item["id"]] = float((face.bbox[3] - face.bbox[1]) / image.shape[0]) if face is not None else 0.0
-    return {"embeddings": out, "face_ratio": ratio}
+        score[item["id"]] = float(face.det_score) if face is not None else 0.0
+    return {"embeddings": out, "face_ratio": ratio, "det_score": score, "face_count": count, "all_faces": all_faces}
 
 
 def run(request: dict) -> dict:

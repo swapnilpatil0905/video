@@ -1,0 +1,37 @@
+# Regional profile: Jaipur (Rajasthani-influenced Hindi).
+id: jaipur
+city: Jaipur
+country: India
+languages_heard: [Hindi, Rajasthani, Marwari, English]
+dialects:
+  rajasthani_hindi:
+    description: Hindi with Rajasthani courtesy — "padharo", "khamma ghani", "hukum", "thaare", warm and formal with elders.
+    accent_for_voice: "speaks Hindi with a Rajasthani accent"
+  neutral_hindi: {description: Natural Hindi., accent_for_voice: "speaks natural Indian Hindi"}
+expressions:
+  - {roman: "Khamma ghani", devanagari: "खम्मा घणी", meaning: "respectful greeting", register: warm, min_intensity: 0.4, use: "greeting elders"}
+  - {roman: "Padharo", devanagari: "पधारो", meaning: "welcome / please come", register: warm, min_intensity: 0.3, use: "hospitality"}
+  - {roman: "Hukum", devanagari: "हुकुम", meaning: "sir (deep respect)", register: any, min_intensity: 0.4, use: "addressing elders / superiors"}
+naming:
+  conventions: Rajput, Marwari, Jain, Muslim and other Rajasthani families; fit the story's family.
+  examples_male: [Vikram Singh Rathore, Aditya Agarwal, Imran Qureshi, Yash Jain]
+  examples_female: [Pooja Rathore, Nidhi Agarwal, Sana Qureshi, Aditi Jain]
+  honorifics: {elder_male: [hukum, kaka sa, bhai sa], elder_female: [bai sa, maa sa, bhabhi sa], respectful: [sa, ji]}
+culture: {food: [dal baati churma, pyaaz kachori, ghewar, laal maas], festivals: [Teej, Gangaur, Diwali, Makar Sankranti kites], everyday: [bazaars, havelis, kite flying]}
+zones: {walled_city: "the Pink City", central: "C-Scheme, MI Road", north_hills: "Amer, Nahargarh", south: "Malviya Nagar, Mansarovar"}
+adjacent_zones: [[walled_city, central], [walled_city, north_hills], [central, south]]
+locations:
+  - {name: Hawa Mahal, devanagari: हवा महल, kind: landmark, zone: walled_city, tags: [heritage, tourist]}
+  - {name: City Palace, devanagari: सिटी पैलेस, kind: landmark, zone: walled_city, tags: [heritage, royal]}
+  - {name: Johari Bazaar, devanagari: जौहरी बाज़ार, kind: market, zone: walled_city, tags: [jewellery, wedding_shopping]}
+  - {name: Bapu Bazaar, devanagari: बापू बाज़ार, kind: market, zone: walled_city, tags: [textiles, budget]}
+  - {name: Jantar Mantar, devanagari: जंतर मंतर, kind: landmark, zone: walled_city, tags: [heritage]}
+  - {name: Amer Fort, devanagari: आमेर किला, kind: landmark, zone: north_hills, tags: [heritage, tourist]}
+  - {name: Jal Mahal, devanagari: जल महल, kind: landmark, zone: north_hills, tags: [lake, evening]}
+  - {name: Nahargarh Fort, devanagari: नाहरगढ़ किला, kind: landmark, zone: north_hills, tags: [sunset, romance, view]}
+  - {name: MI Road, devanagari: एमआई रोड, kind: road, zone: central, tags: [shopping, restaurants]}
+  - {name: C-Scheme, devanagari: सी-स्कीम, kind: neighbourhood, zone: central, tags: [affluent, cafes]}
+  - {name: Malviya Nagar, devanagari: मालवीय नगर, kind: neighbourhood, zone: south, tags: [residential, malls]}
+  - {name: Jaipur Junction, devanagari: जयपुर जंक्शन, kind: transport, zone: central, tags: [railway]}
+  - {name: a kachori shop in the old city, devanagari: पुराने शहर की कचौरी की दुकान, kind: lifestyle, zone: walled_city, tags: [breakfast, street_food]}
+rules: [Use a real place only when the scene calls for it; no travel times; no invented places presented as real.]

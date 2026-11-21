@@ -1,0 +1,395 @@
+# Regional profile: Mumbai Hindi (Bambaiya).
+id: mumbai
+city: Mumbai
+country: India
+languages_heard:
+- Hindi
+- Marathi
+- English
+- Gujarati
+dialects:
+  bambaiya:
+    description: Mumbai street Hindi — "apun", "kya re", "bindaas", "waat lag gayi"; fast, clipped rhythm.
+    accent_for_voice: speaks Hindi with a Mumbai (Bambaiya) accent, fast and casual
+  neutral_hindi:
+    description: Natural Hindi with Mumbai-style English mixing.
+    accent_for_voice: speaks natural urban Indian Hindi
+expressions:
+- roman: Kya re
+  devanagari: क्या रे
+  meaning: what's up / what
+  register: casual
+  min_intensity: 0.4
+  use: friends
+- roman: Bindaas
+  devanagari: बिंदास
+  meaning: carefree / no worries
+  register: casual
+  min_intensity: 0.3
+  use: reassurance
+- roman: Waat lag gayi
+  devanagari: वाट लग गई
+  meaning: we're in trouble
+  register: comic
+  min_intensity: 0.5
+  use: trouble, comic
+- roman: Khaali-peeli
+  devanagari: खाली-पीली
+  meaning: for no reason
+  register: casual
+  min_intensity: 0.3
+  use: pointless
+naming:
+  conventions: Mumbai is mixed — Marathi, Gujarati, North Indian, Parsi, Muslim, Christian families; fit the story's family.
+  examples_male:
+  - Aditya Patil
+  - Rohan Desai
+  - Kabir Shaikh
+  - Neil D'Souza
+  examples_female:
+  - Sneha Kulkarni
+  - Zara Shaikh
+  - Riya Mehta
+  - Anaya Pereira
+  honorifics:
+    elder_male:
+    - bhau
+    - dada
+    - kaka
+    elder_female:
+    - tai
+    - aai
+    - didi
+    respectful:
+    - saheb
+    - ji
+culture:
+  food:
+  - vada pav
+  - cutting chai
+  - pav bhaji
+  festivals:
+  - Ganesh Chaturthi
+  - Diwali
+  - Eid
+  everyday:
+  - local trains
+  - monsoon
+  - cutting chai
+  - dabbawalas
+  - traffic jams
+zones:
+  south: Colaba, Fort, Churchgate, Nariman Point
+  central: Dadar, Parel, Worli, Byculla, Mahim
+  bkc: Bandra Kurla Complex business district
+  western_suburbs: Bandra to Borivali
+  eastern_suburbs: Kurla, Ghatkopar, Powai, Chembur, Mulund
+  thane: Thane city
+  navi_mumbai: Vashi, Nerul
+adjacent_zones:
+- - south
+  - central
+- - central
+  - western_suburbs
+- - central
+  - eastern_suburbs
+- - central
+  - bkc
+- - bkc
+  - western_suburbs
+- - bkc
+  - eastern_suburbs
+- - western_suburbs
+  - eastern_suburbs
+- - eastern_suburbs
+  - thane
+- - eastern_suburbs
+  - navi_mumbai
+- - thane
+  - navi_mumbai
+- - south
+  - navi_mumbai
+locations:
+- name: Marine Drive
+  devanagari: मरीन ड्राइव
+  kind: road
+  zone: south
+  tags:
+  - sea
+  - evening
+  - romance
+- name: Gateway of India
+  devanagari: गेटवे ऑफ इंडिया
+  kind: landmark
+  zone: south
+  tags:
+  - heritage
+  - tourist
+- name: Nariman Point
+  devanagari: नरीमन पॉइंट
+  kind: neighbourhood
+  zone: south
+  tags:
+  - corporate
+  - sea
+- name: Colaba Causeway
+  devanagari: कोलाबा कॉज़वे
+  kind: market
+  zone: south
+  tags:
+  - street_shopping
+  - tourist
+- name: Kala Ghoda
+  devanagari: काला घोड़ा
+  kind: neighbourhood
+  zone: south
+  tags:
+  - art
+  - cafes
+- name: Crawford Market
+  devanagari: क्रॉफर्ड मार्केट
+  kind: market
+  zone: south
+  tags:
+  - wholesale
+  - crowded
+- name: Girgaon Chowpatty
+  devanagari: गिरगांव चौपाटी
+  kind: landmark
+  zone: south
+  tags:
+  - beach
+  - family
+  - street_food
+- name: Mohammed Ali Road
+  devanagari: मोहम्मद अली रोड
+  kind: road
+  zone: south
+  tags:
+  - ramzan_food
+  - crowded
+- name: Haji Ali Dargah
+  devanagari: हाजी अली दरगाह
+  kind: landmark
+  zone: central
+  tags:
+  - religious
+  - sea
+- name: Siddhivinayak Temple
+  devanagari: सिद्धिविनायक मंदिर
+  kind: landmark
+  zone: central
+  tags:
+  - religious
+- name: Dadar
+  devanagari: दादर
+  kind: neighbourhood
+  zone: central
+  tags:
+  - markets
+  - railway
+  - middle_class
+- name: Lower Parel
+  devanagari: लोअर परेल
+  kind: neighbourhood
+  zone: central
+  tags:
+  - offices
+  - malls
+  - nightlife
+- name: Worli
+  devanagari: वर्ली
+  kind: neighbourhood
+  zone: central
+  tags:
+  - affluent
+  - sea
+- name: Dharavi
+  devanagari: धारावी
+  kind: neighbourhood
+  zone: central
+  tags:
+  - working_class
+  - small_industry
+- name: Bandra Kurla Complex
+  devanagari: बीकेसी
+  kind: neighbourhood
+  zone: bkc
+  tags:
+  - corporate
+  - offices
+- name: Bandra
+  devanagari: बांद्रा
+  kind: neighbourhood
+  zone: western_suburbs
+  tags:
+  - affluent
+  - nightlife
+  - film_industry
+- name: Bandstand
+  devanagari: बैंडस्टैंड
+  kind: landmark
+  zone: western_suburbs
+  tags:
+  - sea
+  - romance
+  - evening
+- name: Linking Road
+  devanagari: लिंकिंग रोड
+  kind: market
+  zone: western_suburbs
+  tags:
+  - street_shopping
+- name: Juhu Beach
+  devanagari: जुहू बीच
+  kind: landmark
+  zone: western_suburbs
+  tags:
+  - beach
+  - street_food
+  - family
+- name: Andheri
+  devanagari: अंधेरी
+  kind: neighbourhood
+  zone: western_suburbs
+  tags:
+  - offices
+  - film_industry
+  - middle_class
+- name: Goregaon Film City
+  devanagari: गोरेगांव फिल्म सिटी
+  kind: landmark
+  zone: western_suburbs
+  tags:
+  - film_industry
+- name: Borivali
+  devanagari: बोरीवली
+  kind: neighbourhood
+  zone: western_suburbs
+  tags:
+  - residential
+  - middle_class
+- name: Sanjay Gandhi National Park
+  devanagari: संजय गांधी नेशनल पार्क
+  kind: landmark
+  zone: western_suburbs
+  tags:
+  - nature
+  - outing
+- name: Powai
+  devanagari: पवई
+  kind: neighbourhood
+  zone: eastern_suburbs
+  tags:
+  - it_professionals
+  - lake
+  - affluent
+- name: Ghatkopar
+  devanagari: घाटकोपर
+  kind: neighbourhood
+  zone: eastern_suburbs
+  tags:
+  - residential
+  - middle_class
+- name: Chembur
+  devanagari: चेंबूर
+  kind: neighbourhood
+  zone: eastern_suburbs
+  tags:
+  - residential
+- name: Thane
+  devanagari: ठाणे
+  kind: neighbourhood
+  zone: thane
+  tags:
+  - residential
+  - middle_class
+- name: Vashi
+  devanagari: वाशी
+  kind: neighbourhood
+  zone: navi_mumbai
+  tags:
+  - residential
+  - offices
+- name: Churchgate Station
+  devanagari: चर्चगेट स्टेशन
+  kind: transport
+  zone: south
+  tags:
+  - local_train
+  - terminus
+- name: CSMT
+  devanagari: सीएसएमटी
+  kind: transport
+  zone: south
+  tags:
+  - local_train
+  - heritage
+  - terminus
+- name: Dadar Station
+  devanagari: दादर स्टेशन
+  kind: transport
+  zone: central
+  tags:
+  - local_train
+  - interchange
+  - crowded
+- name: Andheri Station
+  devanagari: अंधेरी स्टेशन
+  kind: transport
+  zone: western_suburbs
+  tags:
+  - local_train
+  - metro_interchange
+- name: Bandra-Worli Sea Link
+  devanagari: बांद्रा-वर्ली सी लिंक
+  kind: road
+  zone: central
+  tags:
+  - drive
+  - sea
+- name: Western Express Highway
+  devanagari: वेस्टर्न एक्सप्रेस हाईवे
+  kind: road
+  zone: western_suburbs
+  tags:
+  - traffic
+  - highway
+- name: Eastern Express Highway
+  devanagari: ईस्टर्न एक्सप्रेस हाईवे
+  kind: road
+  zone: eastern_suburbs
+  tags:
+  - traffic
+  - highway
+- name: Atal Setu
+  devanagari: अटल सेतु
+  kind: road
+  zone: south
+  tags:
+  - sea_bridge
+  - navi_mumbai_route
+- name: Mumbai Airport
+  devanagari: मुंबई एयरपोर्ट
+  kind: transport
+  zone: western_suburbs
+  tags:
+  - airport
+  - travel
+- name: a vada pav stall outside the station
+  devanagari: स्टेशन के बाहर वड़ा पाव
+  kind: lifestyle
+  zone: any
+  tags:
+  - street_food
+  - commute
+- name: an Irani café in Fort
+  devanagari: फोर्ट का ईरानी कैफ़े
+  kind: lifestyle
+  zone: south
+  tags:
+  - chai
+  - bun_maska
+  - friends
+rules:
+- Use a real place only when the scene calls for it; no travel times; no invented places presented as real.
