@@ -342,6 +342,21 @@ def dry_run(ctx: Any, targets: list[str] | None = None) -> dict[str, Any]:
             logging.getLogger().removeHandler(self.handler)
 
     wanted = [t for t in (targets or DRY_TARGETS) if t in ctx.graph.order]
-    with Collect():
-        executed = Runner(dry_ctx, runtime, max_parallel=1).run(wanted)
+    import logging
+
+    class Tag(logging.Filter):  # dry-run lines are labelled so they are never mistaken for the real run
+        def filter(self, record):
+            if not str(record.msg).startswith("[dry run] "):
+                record.msg = "[dry run] " + str(record.msg)
+            return True
+    tag = Tag()
+    handlers = logging.getLogger().handlers
+    for h in handlers:
+        h.addFilter(tag)
+    try:
+        with Collect():
+            executed = Runner(dry_ctx, runtime, max_parallel=1).run(wanted)
+    finally:
+        for h in handlers:
+            h.removeFilter(tag)
     return {"executed": executed, "warnings": warnings, "worker_calls": runtime.calls, "scratch": str(scratch)}
