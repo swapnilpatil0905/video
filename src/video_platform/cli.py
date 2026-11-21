@@ -427,6 +427,16 @@ def cmd_notify(args: argparse.Namespace, ctx: Context | None) -> int:
             trailer = sample_dir / f"trailer_{profile}.mp4"
             preview = _email_preview(trailer, ctx.loaded.state_dir / "work" / "email") if trailer.exists() else None
             attachments += [p for p in (preview, folder / "thumbnail.jpg") if p]
+        fallbacks = []
+        for record in ctx.index.list_records(ctx.loaded.project_id):
+            if record.status != "valid" or record.stage.startswith("item:"):
+                continue
+            for warning in record.provenance.get("warnings", []):
+                if any(k in warning.lower() for k in ("unavailable", "falling back", "fall back", "failed, ")):
+                    fallbacks.append(f"  - {record.stage}: {warning.splitlines()[0][:160]}")
+        if fallbacks:
+            lines += ["Upgrades that fell back to the previous model (fix, then `bash start.sh rerun-stage <stage>`):",
+                      *fallbacks, ""]
         lines += [
             f"Full-quality files on the machine: {sample_dir}",
             "  trailer_<profile>.mp4, <profile>/trailer_with_subtitles.mp4, character_references/, voice_preview/, reports",

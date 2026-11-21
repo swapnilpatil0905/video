@@ -73,6 +73,15 @@ want tts    && mkvenv tts    "$RT/venvs/tts"    "$ROOT/requirements/tts.txt"
 want image  && mkvenv image  "$RT/venvs/image"  "$ROOT/requirements/image.txt"
 want sep     && mkvenv sep     "$RT/venvs/sep"     "$ROOT/requirements/sep.txt"
 want indicf5 && mkvenv indicf5 "$RT/venvs/indicf5" "$ROOT/requirements/indicf5.txt"
+check_import() {  # name python-code — verify an optional runtime actually works; un-mark it if not
+    local name="$1" code="$2" py="$RT/venvs/$1/bin/python"
+    [[ -f "$RT/venvs/$name/.vp_ok" ]] || return 0
+    if ! "$py" -c "$code" >>"$LOGS/setup_$name.log" 2>&1; then
+        rm -f "$RT/venvs/$name/.vp_ok"; fail "$name"
+    fi
+}
+want sep     && check_import sep "import audio_separator"
+want indicf5 && check_import indicf5 "import transformers, soundfile"
 
 fetch() {  # repo_id local_dir [allow_patterns...]
     "$ROOT/.venv-platform/bin/python" - "$@" <<'PY'
@@ -122,7 +131,7 @@ fi
 # ---- DiariZen (speaker diarization) -------------------------------------------------------
 if want diarizen; then
     REPO="$RT/repos/DiariZen"
-    if [[ ! -f "$RT/venvs/diarizen/.vp_ok" ]]; then
+    if [[ ! -f "$RT/venvs/diarizen/.vp_ok" || "$0" -nt "$RT/venvs/diarizen/.vp_ok" ]]; then
         say "diarizen: repository + environment (log: $LOGS/setup_diarizen.log)"
         {
             [[ -d "$REPO/.git" ]] || git clone --recursive --depth 1 https://github.com/BUTSpeechFIT/DiariZen.git "$REPO"
@@ -140,13 +149,14 @@ fi
 # ---- Light-ASD (active speaker detection) ----------------------------------------------
 if want asd; then
     REPO="$RT/repos/Light-ASD"
-    if [[ ! -f "$RT/venvs/asd/.vp_ok" ]]; then
+    if [[ ! -f "$RT/venvs/asd/.vp_ok" || "$ROOT/requirements/asd.txt" -nt "$RT/venvs/asd/.vp_ok" ]]; then
         say "asd: Light-ASD repository + environment (log: $LOGS/setup_asd.log)"
         {
             [[ -d "$REPO/.git" ]] || git clone --depth 1 https://github.com/Junhua-Liao/Light-ASD.git "$REPO"
             uv venv --allow-existing --python 3.11 "$RT/venvs/asd"
             uv pip install --python "$RT/venvs/asd/bin/python" -r "$ROOT/requirements/asd.txt"
             ls "$REPO"/weight/*.model
+            (cd "$REPO" && "$RT/venvs/asd/bin/python" -c "from ASD import ASD; print('Light-ASD import ok')")
         } >"$LOGS/setup_asd.log" 2>&1 && touch "$RT/venvs/asd/.vp_ok" || fail asd
     else say "asd: ready"; fi
 fi
