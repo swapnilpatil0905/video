@@ -225,5 +225,6 @@ if __name__ == "__main__":
         i = argv.index("-k")
         kw = argv[i + 1]
         argv = argv[:i] + argv[i + 2:]
+    argv = [a for a in argv if not a.startswith("-")]  # pytest-style flags (-q, -x) are accepted and ignored
     files = [Path(a) for a in argv] or sorted((ROOT / "tests" / "unit").glob("test_*.py"))
     sys.exit(run([f.resolve() for f in files], kw))

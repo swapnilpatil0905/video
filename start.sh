@@ -71,6 +71,9 @@ setup() {
 
 dry_run() {  # every pending stage with simulated models: code / data-shape errors in seconds, not after hours
     [[ "${VP_SKIP_DRYRUN:-0}" == "1" ]] && return 0
+    echo "== unit tests"
+    ./run.sh --test -q >/tmp/vp_tests.log 2>&1 || { tail -n 30 /tmp/vp_tests.log; notify_failure "unit tests failed"; exit 1; }
+    tail -n 1 /tmp/vp_tests.log
     echo "== dry run (simulated models, real cache untouched)"
     run --dry-run || { notify_failure "dry run failed — a code error was caught before any model loaded"; exit 1; }
 }

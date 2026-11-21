@@ -137,3 +137,21 @@ def test_model_selector_prefers_what_fits():
     sel = ModelSelector({"writer": ["big", "small"]}, {"analyzer": "small"}, reg.__getitem__, gpu_memory_gb=48)
     assert sel.pick("writer") == "small" and sel.pick("analyzer") == "small"
     assert ModelSelector({"writer": ["big", "small"]}, {}, reg.__getitem__, 96).pick("writer") == "big"
+
+
+def test_prompts_are_identical_across_processes():
+    """Prompt text must not depend on hash randomisation (reuse of saved answers + vLLM prefix caching)."""
+    import os
+    import subprocess
+    import sys
+
+    code = ("from video_platform.storytelling import *;"
+            "pm=RegionalLanguageProfileManager.load('hyderabad',{'name':'dakhni_urdu','intensity':0.6},'natural_hinglish');"
+            "db=LocationDatabase(pm.profile);env=RegionalEnvironmentAdapter(db);"
+            "print(db.for_prompt());print(env.plan_schema());print(pm.expressions_for_prompt(0.7));"
+            "print(ScreenplayEnhancementEngine({'enhance_comedy':True,'enhance_emotions':True,'enhance_tragedy':True})"
+            ".plan({'mood':'tragedy','intensity':0.8,'enhancement':{'emotion':True,'tragedy':True}}))")
+    src = str(Path(__file__).resolve().parents[2] / "src")
+    outs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                           env={**os.environ, "PYTHONPATH": src, "PYTHONHASHSEED": seed}).stdout for seed in ("1", "2", "3")}
+    assert len(outs) == 1 and next(iter(outs)).strip()

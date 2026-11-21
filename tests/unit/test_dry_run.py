@@ -101,7 +101,14 @@ def test_dry_run_all_story_and_asset_stages(tmp_path, monkeypatch, repo_root):
         ctx.index.put(ArtifactRecord(project_id="dry", stage=name, stage_version=ctx.graph.get(name).version,
                                      artifact_id=expected[name], params_hash="x", outputs=outputs))
 
+    # a saved answer from an earlier real run whose request no longer matches → must be reported
+    stale = ctx.loaded.state_dir / "work" / "scene_analysis" / expected["scene_analysis"]
+    stale.mkdir(parents=True)
+    (stale / "llm.scenes.request.json").write_text(json.dumps({"prompts": [{"id": "old"}]}), encoding="utf-8")
+    (stale / "llm.scenes.response.json").write_text(json.dumps({"results": {}}), encoding="utf-8")
+
     result = dry_run(ctx)
+    assert result["not_reused"] == ["scene_analysis: llm.scenes"], result["not_reused"]
     assert set(result["executed"]) == SIMULATED, result
     assert result["worker_calls"]["llm"] >= 7  # narrative x2, design, identity, scenes, writer, naturalness, review, rewrite
     # the real index and store were not touched

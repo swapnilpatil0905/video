@@ -222,9 +222,11 @@ def _wav(path: str, seconds: float = 1.0, rate: int = 16000) -> None:
 class FakeRuntime:
     """Stands in for RuntimeRunner: same interface, simulated workers, no subprocesses."""
 
-    def __init__(self, real: Any, log_dir: Path) -> None:
+    def __init__(self, real: Any, log_dir: Path, scratch_state: Path | None = None, real_state: Path | None = None) -> None:
         self.real = real
         self.log_dir = log_dir
+        self.scratch_state, self.real_state = scratch_state, real_state
+        self.not_reused: list[str] = []  # saved answers from earlier real runs that would be thrown away
         self.llm = FakeLLM()
         self.calls: dict[str, int] = {}
         self.emb: dict[str, list[float]] = {}      # image path → simulated face embedding
@@ -275,6 +277,24 @@ class FakeRuntime:
         self.emb[path] = emb
         return emb
 
+    def check_reuse(self, worker: str, request: dict, workdir: Path, tag: str | None) -> None:
+        """A real run saved an answer for this exact call? Then the request must match it, or it is redone."""
+        if not (self.scratch_state and self.real_state):
+            return
+        from ..runtime.launcher import reusable_response
+
+        try:
+            real_dir = self.real_state / workdir.relative_to(self.scratch_state)
+        except ValueError:
+            return
+        suffix = f".{tag}" if tag else ""
+        req, resp = real_dir / f"{worker}{suffix}.request.json", real_dir / f"{worker}{suffix}.response.json"
+        if req.exists() and resp.exists() and reusable_response(req, resp, request) is None:
+            stage = workdir.relative_to(self.scratch_state).parts[1] if len(workdir.parts) > 2 else "?"
+            self.not_reused.append(f"{stage}: {worker}{suffix}")
+            log.warning("saved %s answer for %s will NOT be reused: the request differs from the saved one "
+                        "(changed prompt or settings — or non-deterministic prompt text)", worker, stage)
+
     def run_command(self, runtime, argv, **_kw):
         raise StageFailure(f"dry run: external command for runtime '{runtime}' is not simulated")
 
@@ -282,6 +302,7 @@ class FakeRuntime:
         self.calls[worker] = self.calls.get(worker, 0) + 1
         workdir.mkdir(parents=True, exist_ok=True)
         json.dumps(request, ensure_ascii=False)  # the request must be serialisable, as for a real worker
+        self.check_reuse(worker, request, workdir, tag)
         if worker == "llm":
             return self.llm.run(request)
         if worker == "faces" and request.get("mode") == "identity":
@@ -340,7 +361,7 @@ def dry_run(ctx: Any, targets: list[str] | None = None) -> dict[str, Any]:
     loaded = DryLoaded(ctx.loaded, scratch / "state")
     planner = Planner(ctx.graph, ctx.loaded, ctx.registry, index)
     dry_ctx = type(ctx)(loaded, ctx.graph, ctx.registry, index, store, planner)
-    runtime = FakeRuntime(None, scratch / "state" / "logs")
+    runtime = FakeRuntime(None, scratch / "state" / "logs", scratch / "state", ctx.loaded.state_dir)
     warnings: list[str] = []
 
     class Collect:
@@ -375,4 +396,5 @@ def dry_run(ctx: Any, targets: list[str] | None = None) -> dict[str, Any]:
     finally:
         for h in handlers:
             h.removeFilter(tag)
-    return {"executed": executed, "warnings": warnings, "worker_calls": runtime.calls, "scratch": str(scratch)}
+    return {"executed": executed, "warnings": warnings, "worker_calls": runtime.calls, "scratch": str(scratch),
+            "not_reused": runtime.not_reused}

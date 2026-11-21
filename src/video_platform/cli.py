@@ -674,7 +674,8 @@ def cmd_dry_run(args: argparse.Namespace, ctx: Context) -> int:
         return 5
     _emit(args, result, f"DRY RUN OK in {time.time() - started:.1f}s — stages: {', '.join(result['executed']) or 'none pending'}; "
                         f"simulated worker calls: {result['worker_calls']}; warnings: {len(result['warnings'])} "
-                        f"(scratch: {result['scratch']})")
+                        f"(scratch: {result['scratch']})"
+                        + (f"\nWARNING saved model answers that will be recomputed: {result['not_reused']}" if result["not_reused"] else ""))
     return 0
 
 

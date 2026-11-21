@@ -69,7 +69,7 @@ class LocationDatabase:
         for p in chosen[:limit]:
             by_zone.setdefault(p.get("zone", "?"), []).append(f"{p['name']} ({p.get('kind')})")
         zones = "; ".join(f"{z}: {', '.join(v)}" for z, v in by_zone.items())
-        adjacency = ", ".join(f"{a}~{b}" for a, b in (tuple(sorted(x)) for x in self.adjacent))
+        adjacency = ", ".join(sorted(f"{a}~{b}" for a, b in (tuple(sorted(x)) for x in self.adjacent)))  # stable text
         return f"Places by zone — {zones}\nAdjacent zones: {adjacency or 'n/a'} (any other pair is far)"
 
 
