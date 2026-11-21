@@ -15,13 +15,30 @@ This is a personal self-improvement learning project. It is a reusable, config-d
 
 ## Run it on Vast.ai
 
-1. Rent 1× RTX PRO 6000 (or H100/A100 80 GB) with the NVIDIA CUDA template and a 400 GB disk.
-2. Upload `dist/video-platform-0.4.0.zip` and unzip it.
-3. Create `.env` (HF token and Gmail app password).
-4. Run `bash start.sh notify-test`, then `nohup bash start.sh > /workspace/run.log 2>&1 &`.
-5. You get an email when the trailer is ready.
+Rent 1× RTX PRO 6000 (or H100/A100 80 GB) with the NVIDIA CUDA template, Jupyter + SSH launch mode and a 400 GB disk. Then, on the Vast.ai machine (Jupyter terminal):
 
-Step-by-step: [`docs/RUNBOOK.md`](docs/RUNBOOK.md) → *Installation*.
+```bash
+apt-get update -qq && apt-get install -y -qq git-lfs && git lfs install
+cd /workspace
+git clone https://github.com/swapnilpatil0905/video.git      # private: username + read-only token
+cd video
+python3 -m zipfile -e data/video-data.zip .
+cat > .env <<'EOF'
+HF_TOKEN=hf_xxx
+NOTIFY_EMAIL=swapnil.patil.mail@gmail.com
+VP_GPU_PRICE_PER_HOUR=1.015
+EOF
+bash start.sh notify-test
+nohup bash start.sh > /workspace/run.log 2>&1 &
+```
+
+- **`git clone`** also downloads `data/video-data.zip` (source video + existing analysis) through Git LFS.
+- **`.env`:** replace `hf_xxx` with your Hugging Face token, and `1.015` with the hourly price you rented at. The file stays on the machine and is never committed.
+- **`bash start.sh notify-test`:** sends a test email within seconds.
+- **The last line** starts the trailer in the background. Follow it with `tail -f /workspace/run.log`. You get an email when the trailer is ready, or if anything fails.
+- **Results** are in `projects/project_001/sample/`. Download them, then destroy the instance.
+
+Step-by-step details: [`docs/RUNBOOK.md`](docs/RUNBOOK.md) → *Installation*.
 
 ## Developer commands
 
