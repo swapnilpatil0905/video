@@ -20,12 +20,12 @@ def lang_name(code: str) -> str:
 
 
 def call_llm(s: StageContext, prompts: list[dict[str, str]], *, model_id: str | None = None,
-             tag: str | None = None) -> dict[str, Any]:
+             tag: str | None = None, max_tokens: int | None = None) -> dict[str, Any]:
     llm = s.config.production.llm
     record = s.ctx.registry.get(model_id or llm.model)
     response = s.runtime.call_worker("llm", "llm", {
         "hf_repo": record.weights.hf_repo, "prompts": prompts, "backend": llm.backend,
-        "max_model_len": llm.max_model_len, "max_tokens": llm.max_tokens, "temperature": llm.temperature,
+        "max_model_len": llm.max_model_len, "max_tokens": max_tokens or llm.max_tokens, "temperature": llm.temperature,
         "tensor_parallel_size": llm.tensor_parallel_size, "gpu_memory_utilization": llm.gpu_memory_utilization,
         "retries": 2,
     }, workdir=s.workdir, tag=tag)
@@ -184,29 +184,34 @@ def localization(s: StageContext) -> None:
     chunks = story["chunks"]
     by_id = {seg["segment_id"]: seg for seg in segments}
     prompts = []
+    batch = s.config.localization.batch_lines
     for i, chunk in enumerate(chunks):
-        lines = []
-        for sid in chunk["segment_ids"]:
-            seg = by_id[sid]
-            char = speaker_char.get(seg.get("speaker_id") or "")
-            who = names.get(char or "", seg.get("speaker_id") or "UNKNOWN")
-            emo = emotions.get(sid, {}).get("emotion", "unknown")
-            lines.append(f"{sid} | {who} | {seg['end_s'] - seg['start_s']:.1f}s | {emo} | {seg['text']}")
-        previous = chunks[i - 1]["summary"] if i else ""
-        prompts.append({"id": chunk["chunk_id"], "system": system, "user": (
-            f"Story synopsis: {story.get('global', {}).get('synopsis', '')[:1200]}\n"
-            f"Previous part: {previous}\nThis part: {chunk['summary']}\nName glossary:\n{glossary}\n\n"
-            f"Lines (id | speaker | available seconds | detected emotion | {src} text):\n" + "\n".join(lines) +
-            f'\n\nReturn JSON: {{"lines": [{{"id": str, "text": str ({tgt}, natural), "short": str (shorter {tgt} '
-            'version that fits the available seconds, same meaning), "emotion": str, "delivery": str (how to say it)}]}. '
-            "Include every id exactly once."
-        )})
-    results = call_llm(s, prompts)
+        for j, part in enumerate(batched(chunk["segment_ids"], batch)):
+            lines = []
+            for sid in part:
+                seg = by_id[sid]
+                char = speaker_char.get(seg.get("speaker_id") or "")
+                who = names.get(char or "", seg.get("speaker_id") or "UNKNOWN")
+                emo = emotions.get(sid, {}).get("emotion", "unknown")
+                lines.append(f"{sid} | {who} | {seg['end_s'] - seg['start_s']:.1f}s | {emo} | {seg['text']}")
+            previous = chunks[i - 1]["summary"] if i else ""
+            prompts.append({"id": f"{chunk['chunk_id']}_p{j}", "system": system, "user": (
+                f"Story synopsis: {story.get('global', {}).get('synopsis', '')[:1200]}\n"
+                f"Previous part: {previous}\nThis part: {chunk['summary']}\nName glossary:\n{glossary}\n\n"
+                f"Lines (id | speaker | available seconds | detected emotion | {src} text):\n" + "\n".join(lines) +
+                f'\n\nReturn JSON: {{"lines": [{{"id": str, "text": str ({tgt}, natural), "short": str (shorter {tgt} '
+                'version that fits the available seconds, same meaning), "emotion": str, "delivery": str (how to say it)}]}. '
+                "Include every id exactly once."
+            )})
+    results = call_llm(s, prompts, max_tokens=s.config.localization.max_tokens)
+    got = {}
+    for r in results.values():
+        for x in (r or {}).get("lines", []) if isinstance(r, dict) else []:
+            if isinstance(x, dict) and x.get("id"):
+                got.setdefault(str(x["id"]).strip(), x)
 
     localized, missing = [], []
     for chunk in chunks:
-        r = results.get(chunk["chunk_id"]) or {}
-        got = {x.get("id"): x for x in r.get("lines", []) if isinstance(x, dict)}
         for sid in chunk["segment_ids"]:
             seg = by_id[sid]
             x = got.get(sid)
@@ -249,15 +254,18 @@ def polish_lines(s: StageContext, lines: list[dict], chunks: list[dict], names: 
         if line["status"] == "ok":
             by_chunk[chunk_of.get(line["segment_id"], "chunk_x")].append(line)
     prompts = []
-    for chunk_id, items in by_chunk.items():
-        rows = "\n".join(f"{x['segment_id']} | {x['target_duration_s']:.1f}s | {x['emotion']} | source: {x['source_text']} | "
-                         f"draft: {x['target_text']} | short draft: {x['short_text']}" for x in items)
-        prompts.append({"id": chunk_id, "system": system, "user": (
-            f"Character names: {', '.join(names.values())}\n\nLines (id | seconds | emotion | source | draft | short draft):\n"
-            f"{rows}\n\nReturn JSON: {{\"lines\": [{{\"id\": str, \"text\": str, \"short\": str}}]}} with every id exactly once."
-        )})
+    batch = s.config.localization.batch_lines
+    for chunk_id, all_items in by_chunk.items():
+        for j, items in enumerate(batched(all_items, batch)):
+            rows = "\n".join(f"{x['segment_id']} | {x['target_duration_s']:.1f}s | {x['emotion']} | source: {x['source_text']} | "
+                             f"draft: {x['target_text']} | short draft: {x['short_text']}" for x in items)
+            prompts.append({"id": f"{chunk_id}_p{j}", "system": system, "user": (
+                f"Character names: {', '.join(names.values())}\n\nLines (id | seconds | emotion | source | draft | short draft):\n"
+                f"{rows}\n\nReturn JSON: {{\"lines\": [{{\"id\": str, \"text\": str, \"short\": str}}]}} with every id exactly once."
+            )})
     try:
-        results = call_llm(s, prompts, model_id=model_id, tag="polish")
+        results = call_llm(s, prompts, model_id=model_id, tag="polish",
+                           max_tokens=s.config.localization.max_tokens)
     except Exception as exc:  # noqa: BLE001 - keep the drafts
         s.warn(f"dialogue polish with {model_id} failed; keeping the first-pass translation: {str(exc)[:200]}")
         return lines, 0
@@ -276,6 +284,10 @@ def polish_lines(s: StageContext, lines: list[dict], chunks: list[dict], names: 
             line["polished_by"] = model_id
             count += 1
     return lines, count
+
+
+def batched(items: list, size: int) -> list[list]:
+    return [items[i:i + size] for i in range(0, len(items), max(1, size))]
 
 
 def group_by(items: list[dict], key: str) -> dict[str, list[dict]]:

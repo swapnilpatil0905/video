@@ -309,7 +309,9 @@ class Runner:
             provenance={"warnings": sctx.warnings, **sctx.provenance},
         )
         index.put(record)
-        log.info("✔ stage %s in %.1fs (%d warnings)", spec.name, time.time() - started, len(sctx.warnings))
+        summary = ", ".join(f"{k}={m.value}" for k, m in list(sctx.metrics.items())[:8])
+        log.info("✔ stage %s in %.1fs (%d warnings)%s", spec.name, time.time() - started, len(sctx.warnings),
+                 f" — {summary}" if summary else "")
 
     def _write_traceback(self, stage: str) -> Path:
         path = self.ctx.loaded.state_dir / "logs" / f"{stage}.traceback.txt"

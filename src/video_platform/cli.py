@@ -25,7 +25,7 @@ from .core.network_policy import DEFAULT_FORBIDDEN_HOST_PATTERNS, preflight
 from .approval.state import ApprovalStore
 from .migration.legacy import LegacyImporter, build_manifest, compare_manifests
 from .orchestration.runner import Runner
-from .runtime.launcher import RuntimeRunner, prune_hf_model, start_prefetch
+from .runtime.launcher import RuntimeRunner, disk_free_gb, hf_cached_gb, hf_repo_gb, prune_hf_model, start_prefetch
 from .models.registry import ModelRegistry, check_usage_policy, verify_registry
 from .orchestration.graph import StageGraph, load_pipeline
 from .orchestration.planner import Planner
@@ -267,18 +267,42 @@ def cmd_execute(args: argparse.Namespace, ctx: Context) -> int:
 
     runtime = RuntimeRunner(ctx.config.runtime, ctx.loaded.state_dir / "logs")
 
+    repo_sizes: dict[str, float | None] = {}
+
+    def repo_size(repo: str) -> float:
+        if repo not in repo_sizes:
+            repo_sizes[repo] = hf_repo_gb(repo, os.environ.get("HF_TOKEN"))
+        return repo_sizes[repo] or 0.0
+
     def after_stage(spec: Any, remaining: list[str]) -> None:
-        """Free disk: drop a model's weights once no remaining stage in this run uses it."""
-        if not ctx.config.runtime.prune_weights_after_use:
+        """Free disk only when needed: drop finished models' weights if the remaining stages would not fit."""
+        mode = ctx.config.runtime.prune_weights
+        if mode == "never":
             return
+        hf_home = Path(runtime.env("core")["HF_HOME"])
         still_needed = {m for name in remaining for m in ctx.planner.model_ids(ctx.graph.get(name))}
+        candidates = []
         for model_id in ctx.planner.model_ids(spec):
             repo = ctx.registry.get(model_id).weights.hf_repo
-            if model_id in still_needed or not repo:
-                continue
-            freed = prune_hf_model(Path(runtime.env("core")["HF_HOME"]), repo)
-            if freed > 1:
-                log.info("freed %.0f GB: %s weights are not needed for the rest of this run", freed, model_id)
+            if repo and model_id not in still_needed and hf_cached_gb(hf_home, repo) > 0.5:
+                candidates.append((model_id, repo))
+        if not candidates:
+            return
+        if mode == "auto":
+            upcoming = {ctx.registry.get(m).weights.hf_repo for m in still_needed} - {None}
+            to_download = sum(max(0.0, repo_size(r) - hf_cached_gb(hf_home, r)) for r in upcoming)
+            free = disk_free_gb(hf_home)
+            reserve = ctx.config.runtime.prune_disk_reserve_gb
+            if free - to_download >= reserve:
+                log.info("keeping %s weights (%.0f GB free, %.0f GB still to download, reserve %.0f GB)",
+                         ", ".join(m for m, _ in candidates), free, to_download, reserve)
+                return
+            candidates.sort(key=lambda c: -hf_cached_gb(hf_home, c[1]))
+        for model_id, repo in candidates:
+            freed = prune_hf_model(hf_home, repo)
+            log.info("freed %.0f GB: deleted %s weights (not needed for the rest of this run)", freed, model_id)
+            if mode == "auto" and disk_free_gb(hf_home) - to_download >= reserve:
+                break
 
     if ctx.config.runtime.prefetch_weights:
         upcoming: list[str] = []

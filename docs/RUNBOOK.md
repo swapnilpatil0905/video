@@ -51,7 +51,11 @@ bash start.sh notify-test       # "[mail] sent" → check your inbox (and spam)
 ```bash
 nohup bash start.sh > /workspace/run.log 2>&1 &
 tail -f /workspace/run.log      # Ctrl+C stops watching; the run continues
+bash start.sh watch             # filtered live view: stages, ⏳ heartbeats, warnings, errors
+bash start.sh progress          # one-shot snapshot: current stage, worker progress, GPU, disk
 ```
+
+While a model step runs, `run.log` gets a `⏳` heartbeat every 60 s (`runtime.heartbeat_seconds`): elapsed time, GPU use/VRAM and the latest line of that worker's log (e.g. `[wan] item 7/38 (16% done) 24m elapsed, eta 2h05m` or vLLM's `Processed prompts: 45%`). Each finished stage logs its duration and key metrics.
 
 You get an **email when the trailer is ready**, with a summary, a compressed preview and the thumbnail. If anything fails, the email contains the error.
 
@@ -74,6 +78,7 @@ Download the `sample/` folder (Jupyter → right-click → Download, or zip it f
 | Command | Purpose |
 |---|---|
 | `bash start.sh status` | Progress and cache status |
+| `bash start.sh stop` | Stop the pipeline and its model workers. Finished work stays cached; start again with `nohup bash start.sh > /workspace/run.log 2>&1 &`. |
 | `tail -f /workspace/run.log` | Live log |
 | `nohup bash start.sh > /workspace/run.log 2>&1 &` | Resume after an error or restart (finished work is reused) |
 | `bash start.sh regen-shot SH_00042`, then `bash start.sh` | Redo one shot |
@@ -96,7 +101,7 @@ To also compare a cheaper `balanced` trailer, set `compare_profiles: [high, bala
 | Hindi voices | Chatterbox **vs** IndicF5 bake-off (lower error wins) | Chatterbox |
 | Character sheets | Qwen-Image-Edit-2509 | (same pipeline) |
 | Missed characters | clip-level identity check + Light-ASD evidence | shot keyframe only |
-| Disk | weights deleted after their last stage (`runtime.prune_weights_after_use`) | keep all |
+| Disk | `runtime.prune_weights: auto` keeps all weights, and deletes finished models only if the remaining stages wouldn't fit (keeping `prune_disk_reserve_gb` free). `always` / `never` are also available. | keep all |
 
 Known remaining gaps: [`docs/GAPS.md`](GAPS.md).
 

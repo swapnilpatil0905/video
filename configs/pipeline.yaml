@@ -199,11 +199,11 @@ stages:
     milestone: M4
 
   - name: localization
-    version: "1"
+    version: "2"
     description: Context-aware Hindi dialogue with shorter variants, emotion and delivery notes.
     depends_on: [narrative, character_design, alignment, emotion, speaker_mapping]
     runtime: llm-gpu
-    params_from: production.llm
+    params_from: [production.llm, localization]
     model_from: [production.llm.model, production.llm.polish_model]
     outputs: [localized_lines.json]
     milestone: M3

@@ -16,7 +16,7 @@ import os
 import sys
 import traceback
 
-from .common import device
+from .common import Progress, device
 
 
 def _iou(a, b) -> float:
@@ -63,7 +63,9 @@ def run(request: dict) -> dict:
     capture = cv2.VideoCapture(request["video"])
     results: dict = {}
 
+    progress = Progress("light-asd", len(request["segments"]))
     for seg in request["segments"]:
+        progress.step()
         start = max(seg["start"], seg["shot_start"]) + 0.04
         end = min(seg["end"], seg["shot_end"] - 0.04, start + float(p.get("asd_max_seconds", 2.5)))
         if end - start < 0.4:

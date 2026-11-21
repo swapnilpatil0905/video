@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .common import device
+from .common import Progress, device
 
 
 def run(request: dict) -> dict:
@@ -19,7 +19,9 @@ def run(request: dict) -> dict:
     rate = model.config.sampling_rate
 
     out = {}
+    progress = Progress("voice-design", len(request["items"]))
     for item in request["items"]:
+        progress.step()
         torch.manual_seed(int(item.get("seed", 0)))
         description = description_tokenizer(item["description"], return_tensors="pt").to(dev)
         prompt = tokenizer(item["text"], return_tensors="pt").to(dev)

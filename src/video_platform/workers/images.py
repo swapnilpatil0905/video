@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .common import device, free_gpu
+from .common import Progress, device, free_gpu
 
 
 def _load(repo: str):
@@ -25,7 +25,9 @@ def run(request: dict) -> dict:
     gen_device = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
 
     pipe = _load(request["model_repo"])
+    progress = Progress("images-master", len(request["characters"]))
     for c in request["characters"]:
+        progress.step()
         try:
             generator = torch.Generator(gen_device).manual_seed(int(c["seed"]))
             image = pipe(

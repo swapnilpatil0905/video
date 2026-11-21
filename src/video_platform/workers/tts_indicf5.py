@@ -6,6 +6,8 @@ never a source actor's voice.
 
 from __future__ import annotations
 
+from .common import Progress
+
 
 def run(request: dict) -> dict:
     import numpy as np
@@ -22,7 +24,9 @@ def run(request: dict) -> dict:
         pass
     rate = int(request.get("sample_rate", 24000))
     out, errors = {}, {}
+    progress = Progress("tts-indicf5", len(request["items"]))
     for item in request["items"]:
+        progress.step()
         try:
             audio = model(item["text"], ref_audio_path=item["ref"], ref_text=item["ref_text"])
             audio = np.asarray(audio)

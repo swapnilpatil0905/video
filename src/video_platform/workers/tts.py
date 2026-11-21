@@ -6,7 +6,7 @@ source actor's voice.
 
 from __future__ import annotations
 
-from .common import device
+from .common import Progress, device
 
 
 def run(request: dict) -> dict:
@@ -17,7 +17,9 @@ def run(request: dict) -> dict:
     dev = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
     model = ChatterboxMultilingualTTS.from_pretrained(device=dev)
     out, errors = {}, {}
+    progress = Progress("tts-chatterbox", len(request["items"]))
     for item in request["items"]:
+        progress.step()
         try:
             torch.manual_seed(int(item.get("seed", 0)))
             wav = model.generate(

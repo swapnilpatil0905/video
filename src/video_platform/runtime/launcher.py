@@ -42,6 +42,39 @@ RUNTIME_VENVS = {
 }
 
 
+_ANSI = __import__("re").compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def last_log_line(path: Path, limit: int = 160) -> str:
+    """Most recent meaningful line of a worker log (handles tqdm '\\r' progress bars)."""
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(0, 2)
+            handle.seek(max(0, handle.tell() - 8192))
+            text = handle.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+    parts = [_ANSI.sub("", p).strip() for p in text.replace("\r", "\n").split("\n")]
+    parts = [p for p in parts if p and not p.startswith("$ (cwd=")]
+    return (parts[-1][:limit] if parts else "")
+
+
+def gpu_summary() -> str:
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+                              "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10)
+        util, used, total = (x.strip() for x in out.stdout.splitlines()[0].split(","))
+        return f"GPU {util}% {float(used) / 1024:.0f}/{float(total) / 1024:.0f} GB"
+    except Exception:  # noqa: BLE001
+        return "GPU n/a"
+
+
+def _fmt_elapsed(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m" if h else f"{m}m{s:02d}s"
+
+
 def detect_gpu_memory_gb() -> float:
     """Total memory of GPU 0 in GB (0 when no NVIDIA GPU is visible)."""
     if os.environ.get("VP_GPU_MEMORY_GB"):
@@ -139,16 +172,24 @@ class RuntimeRunner:
         timeout = (timeout_minutes or self.spec.worker_timeout_minutes) * 60
         start = time.time()
         log.info("run [%s] %s (log: %s)", runtime, " ".join(argv[:4]) + (" …" if len(argv) > 4 else ""), log_path)
+        heartbeat = float(getattr(self.spec, "heartbeat_seconds", 60) or 0)
         with log_path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n$ (cwd={cwd}) {' '.join(argv)}\n")
             handle.flush()
-            try:
-                result = subprocess.run(
-                    argv, cwd=cwd, env={**self.env(runtime), **(env_extra or {})}, stdout=handle,
-                    stderr=subprocess.STDOUT, timeout=timeout,
-                )
-            except subprocess.TimeoutExpired as exc:
-                raise StageFailure(f"{log_name}: timed out after {timeout / 60:.0f} min (see {log_path})") from exc
+            proc = subprocess.Popen(argv, cwd=cwd, env={**self.env(runtime), **(env_extra or {})}, stdout=handle,
+                                    stderr=subprocess.STDOUT)
+            while True:
+                try:
+                    proc.wait(timeout=heartbeat if heartbeat > 0 else None)
+                    break
+                except subprocess.TimeoutExpired:
+                    elapsed = time.time() - start
+                    if elapsed > timeout:
+                        proc.kill()
+                        raise StageFailure(f"{log_name}: timed out after {timeout / 60:.0f} min (see {log_path})") from None
+                    log.info("⏳ %s running %s | %s | %s", log_name, _fmt_elapsed(elapsed), gpu_summary(),
+                             last_log_line(log_path))
+        result = proc
         if result.returncode != 0:
             tail = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]
             raise StageFailure(f"{log_name}: exit code {result.returncode} (see {log_path})\n  " + "\n  ".join(tail))
@@ -199,12 +240,17 @@ def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: st
                 folder = Path(hf_home) / "hub" / ("models--" + repo.replace("/", "--"))
                 info = api.model_info(repo, files_metadata=True)
                 size_gb = sum((s.size or 0) for s in (info.siblings or [])) / 1e9
-                cached_gb = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file()) / 1e9 if folder.exists() else 0
+                cached_gb = sum(f.stat().st_size for f in (folder / "blobs").rglob("*")
+                                if f.is_file() and not f.is_symlink() and not f.name.endswith(".incomplete")) / 1e9 \
+                    if (folder / "blobs").exists() else 0
                 free_gb = shutil.disk_usage(hf_home).free / 1e9
+                if cached_gb >= size_gb * 0.99:
+                    log.info("prefetch: %s already cached (%.0f GB)", repo, cached_gb)
+                    continue
                 if size_gb - cached_gb > free_gb - reserve_gb:
                     log.info("prefetch paused before %s (%.0f GB needed, %.0f GB free)", repo, size_gb - cached_gb, free_gb)
                     return
-                log.info("prefetching %s (%.0f GB) in the background", repo, size_gb)
+                log.info("prefetching %s (%.0f GB still to download) in the background", repo, size_gb - cached_gb)
                 snapshot_download(repo, max_workers=16, token=token)
             except Exception as exc:  # noqa: BLE001 - prefetch is best effort
                 log.info("prefetch of %s skipped: %s", repo, str(exc)[:200])
@@ -212,6 +258,32 @@ def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: st
     thread = threading.Thread(target=worker, name="weight-prefetch", daemon=True)
     thread.start()
     return thread
+
+
+def hf_cached_gb(hf_home: Path, repo_id: str) -> float:
+    """Size of a model's finished files in the Hugging Face cache (GB)."""
+    blobs = Path(hf_home) / "hub" / ("models--" + repo_id.replace("/", "--")) / "blobs"
+    if not blobs.exists():
+        return 0.0
+    return sum(f.stat().st_size for f in blobs.iterdir()
+               if f.is_file() and not f.is_symlink() and not f.name.endswith(".incomplete")) / 1e9
+
+
+def hf_repo_gb(repo_id: str, token: str | None = None) -> float | None:
+    """Total download size of a model repo (GB), from the Hub API; None if unknown."""
+    try:
+        from huggingface_hub import HfApi
+
+        info = HfApi(token=token).model_info(repo_id, files_metadata=True)
+        return sum((s.size or 0) for s in (info.siblings or [])) / 1e9
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def disk_free_gb(path: Path) -> float:
+    import shutil
+
+    return shutil.disk_usage(path).free / 1e9
 
 
 def prune_hf_model(hf_home: Path, repo_id: str) -> float:

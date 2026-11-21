@@ -11,6 +11,8 @@ Request: {"repo", "ckpt_dir", "task", "frame_num", "offload_model": bool, "use_r
 
 from __future__ import annotations
 
+from .common import Progress
+
 import inspect
 import os
 import sys
@@ -140,7 +142,9 @@ def run(request: dict) -> dict:
             notes["attention"] = f"default (sage unavailable: {type(exc).__name__}: {exc})"
 
     results = {}
+    progress = Progress("wan", len(request["jobs"]))
     for job in request["jobs"]:
+        progress.step()
         t0 = time.time()
         try:
             gen = _accepts(model.generate, {

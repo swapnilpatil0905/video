@@ -7,6 +7,8 @@ Response: {"results": {id: parsed JSON | null}, "raw": {id: text for failures}}
 
 from __future__ import annotations
 
+import sys
+
 from .common import extract_json
 
 _STRICT = "\n\nReturn ONLY valid JSON. No explanations, no markdown."
@@ -58,6 +60,28 @@ def _transformers_generate(request: dict):
     return generate
 
 
+def salvage_lines(text: str) -> dict | None:
+    """Recover the complete {"id": ...} objects from a truncated JSON answer."""
+    import json
+    import re
+
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
+    decoder, found, pos = json.JSONDecoder(), [], 0
+    while True:
+        start = text.find("{", pos)
+        if start == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except ValueError:
+            pos = start + 1
+            continue
+        if isinstance(obj, dict) and "id" in obj:
+            found.append(obj)
+        pos = end if isinstance(obj, dict) and "id" in obj else start + 1
+    return {"lines": found} if found else None
+
+
 def run(request: dict) -> dict:
     if request.get("backend", "vllm") == "vllm":
         try:
@@ -70,7 +94,8 @@ def run(request: dict) -> dict:
     pending = list(request["prompts"])
     results: dict = {}
     raw: dict = {}
-    for attempt in range(int(request.get("retries", 2)) + 1):
+    attempts = int(request.get("retries", 2)) + 1
+    for attempt in range(attempts):
         if not pending:
             break
         conversations = [
@@ -85,8 +110,16 @@ def run(request: dict) -> dict:
                 results[prompt["id"]] = extract_json(text)
                 raw.pop(prompt["id"], None)
             except ValueError:
+                salvaged = salvage_lines(text) if attempt == attempts - 1 else None
+                if salvaged:
+                    results[prompt["id"]] = salvaged
+                    print(f"[llm] {prompt['id']}: answer cut off, kept {len(salvaged['lines'])} complete lines",
+                          file=sys.stderr, flush=True)
+                    continue
                 raw[prompt["id"]] = text[-2000:]
                 still.append(prompt)
+        print(f"[llm] attempt {attempt + 1}/{attempts}: {len(pending) - len(still)}/{len(pending)} prompts parsed",
+              file=sys.stderr, flush=True)
         pending = still
     for prompt in pending:
         results[prompt["id"]] = None

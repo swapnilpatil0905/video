@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .common import device
+from .common import Progress, device
 
 
 def run(request: dict) -> dict:
@@ -18,7 +18,9 @@ def run(request: dict) -> dict:
         model = model.half()
     results = {}
     batch_size = int(request.get("batch", 8))
+    progress = Progress("upscale", len(request["jobs"]))
     for job in request["jobs"]:
+        progress.step()
         try:
             capture = cv2.VideoCapture(job["input"])
             fps = capture.get(cv2.CAP_PROP_FPS) or 24

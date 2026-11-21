@@ -85,6 +85,9 @@ class Localization(StrictModel):
     # YAML key stays "register"; the attribute is renamed to avoid shadowing a Python built-in.
     model_config = ConfigDict(extra="forbid", validate_default=True, populate_by_name=True)
     speech_register: Literal["colloquial", "neutral", "formal"] = Field(default="colloquial", alias="register")
+    batch_lines: int = Field(
+        default=12, ge=3, le=60, description="lines per translation/polish prompt (keeps the JSON answer within max tokens)")
+    max_tokens: int = Field(default=8192, ge=512, description="answer budget for translation/polish prompts")
 
 
 class Creative(StrictModel):
@@ -570,9 +573,13 @@ class RuntimeSpec(StrictModel):
         "wan": "repos/Wan2.2", "latentsync": "repos/LatentSync", "lightasd": "repos/Light-ASD"})
     weights_dir: str = "weights"
     worker_timeout_minutes: int = Field(default=720, ge=1)
+    heartbeat_seconds: int = Field(default=60, ge=0, description="progress line in run.log while a model step runs (0 = off)")
     max_parallel_stages: int = Field(default=3, ge=1, description="independent pipeline stages run concurrently")
-    prune_weights_after_use: bool = Field(
-        default=True, description="delete a model's downloaded weights once no remaining stage in the run needs it")
+    prune_weights: Literal["auto", "always", "never"] = Field(
+        default="auto",
+        description="auto: delete finished models' weights only when free disk would fall below prune_disk_reserve_gb "
+                    "for the remaining stages; always: delete after last use; never: keep everything")
+    prune_disk_reserve_gb: float = Field(default=40.0, ge=0, description="free space to keep for renders and caches")
     prefetch_weights: bool = Field(
         default=True, description="download upcoming stages' models in the background while the GPU works")
     prefetch_disk_reserve_gb: float = Field(default=50.0, ge=0, description="never prefetch into the last N GB")
