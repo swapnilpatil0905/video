@@ -203,6 +203,21 @@ The system prompt asks for a scene written as an Indian screenwriter would write
 
 ## 13. Configuration
 
+**Inputs.** Region, language and slang can be given on the command line. The choice is saved to `projects/<id>/local.yaml` (gitignored), which is merged over `config.yaml` on every command:
+
+```bash
+bash start.sh run --region mumbai --language hinglish --slang low
+bash start.sh configure --region hyderabad --slang high     # save only
+```
+
+| Input | Values | Sets |
+|---|---|---|
+| `--region` | any `configs/regional_profiles/*.yaml` (aliases: bombay, bangalore, calcutta, madras, neutral) | `regional_profile`, `dialect.name` (the profile's regional dialect), `character_names.region` |
+| `--language` | hindi · hinglish · formal · dakhni | `writing_style` |
+| `--slang` | none · low (0.25) · medium (0.5) · high (0.8) · max, or 0–1 | `dialect.intensity` (forced slang stays off) |
+
+**The same settings in the config file:**
+
 Under `localization:` in the project config. All keys are optional; defaults are shown in `src/video_platform/config/schema.py`.
 
 ```yaml

@@ -270,6 +270,9 @@ def load_project_config(
     base = load_yaml(default_path) if default_path.exists() else {}
     project_raw = load_yaml(config_path)
     merged = deep_merge(base, project_raw)
+    local_path = config_path.parent / "local.yaml"  # per-machine choices (start.sh configure / --region …)
+    if local_path.exists():
+        merged = deep_merge(merged, load_yaml(local_path) or {})
     merged = merge_global_cast(merged, root, env)
     merged = merge_cast_folders(merged, root, config_path.parent)
     fingerprint_cast_photos(merged, config_path.parent)

@@ -41,6 +41,17 @@ export HF_HOME="${VP_HF_HOME:-$VP_RUNTIME_ROOT/hf}"
 
 PROJECT="${PROJECT:-projects/project_001/config.yaml}"
 CMD="${1:-run}"
+# language inputs, accepted by any command: --region X --language Y --slang Z (saved for this project)
+CHOICES=()
+ARGS=("$@")
+for ((i = 1; i < ${#ARGS[@]}; i++)); do
+    case "${ARGS[$i]}" in
+        --region|--language|--slang) CHOICES+=("${ARGS[$i]}" "${ARGS[$((i + 1))]:-}"); i=$((i + 1)) ;;
+    esac
+done
+if [[ "$CMD" == --region || "$CMD" == --language || "$CMD" == --slang ]]; then  # flags without a command = run
+    CHOICES=("$@"); CMD=run
+fi
 
 single_instance() {  # never let two pipelines write to the same project at once
     mkdir -p "$VP_RUNTIME_ROOT"
@@ -52,6 +63,9 @@ single_instance() {  # never let two pipelines write to the same project at once
 }
 case "$CMD" in run|"" |approve|resume|smoke) single_instance ;; esac
 run() { ./run.sh --project "$PROJECT" "$@"; }
+if (( ${#CHOICES[@]} )); then
+    ./run.sh --project "$PROJECT" --configure "${CHOICES[@]}" || exit 2
+fi
 RUN_LOG="${RUN_LOG:-/workspace/run.log}"
 
 notify_failure() {  # best effort; stdlib-only, works even before setup
@@ -180,6 +194,7 @@ case "$CMD" in
     regen-shot) run --regenerate-shot "${2:?shot id, e.g. SH_00042}" ;;
     regen-line) run --regenerate-dialogue "${2:?segment id, e.g. SEG_000123}" ;;
     dryrun)  run --dry-run ;;
+    configure) run --configure ;;   # shows the current choice (with --region/--language/--slang: saves it)
     rerun-stage) run --rerun-stage "${2:?stage name, e.g. active_speaker}" ;;
     setup)   setup ;;
     test)    setup; ./run.sh --test ;;
@@ -196,5 +211,5 @@ case "$CMD" in
             --mode analyze-and-sample
         echo "Smoke trailers: $SMOKE/sample/trailer_high.mp4 and trailer_balanced.mp4 (+ comparison.json)"
         ;;
-    *) echo "unknown command '$CMD' (run|approve <profile>|reject|resume|stop|status|smoke|regen-shot|regen-line|rerun-stage|setup|test|notify-test|watch|progress|dryrun)"; exit 2 ;;
+    *) echo "unknown command '$CMD' (run|approve <profile>|reject|resume|stop|status|smoke|regen-shot|regen-line|rerun-stage|setup|test|notify-test|watch|progress|dryrun|configure) [--region R] [--language L] [--slang S]"; exit 2 ;;
 esac

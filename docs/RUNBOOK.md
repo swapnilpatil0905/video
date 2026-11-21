@@ -110,7 +110,16 @@ Known remaining gaps: [`docs/GAPS.md`](GAPS.md).
 
 Configured under `localization:` in the project config (project_001: Hyderabad, Dakhni Urdu, natural Hinglish). Order: scene analysis → Indian screenplay → quality + timing review → emotion-aware voices → lip-sync. Details: [`docs/specs/indian-story-adaptation.md`](specs/indian-story-adaptation.md).
 
-- Change city: `localization.regional_profile: mumbai` (also `delhi`, `lucknow`, `bengaluru`, `kolkata`, `chennai`, `pune`, `jaipur`, `neutral_hindi`, …). Add a city by copying `configs/regional_profiles/hyderabad.yaml`.
+- **Choose region, language and slang as input** (saved per project in `projects/<id>/local.yaml`, gitignored; later commands keep it):
+
+  ```bash
+  bash start.sh run --region mumbai --language hinglish --slang low
+  bash start.sh configure --region hyderabad --slang high     # save only (no run)
+  bash start.sh configure                                     # show the current choice
+  ```
+
+  `--region`: hyderabad, mumbai, delhi, lucknow, bengaluru, chennai, kolkata, pune, jaipur, punjabi_hindi, telugu_hindi, neutral_hindi (aliases: bombay, bangalore, calcutta, madras, neutral). `--language`: hindi, hinglish, formal, dakhni. `--slang`: none, low, medium, high, max or 0–1. A new region also regenerates the faces (they follow the characters' region).
+- Or in the config: `localization.regional_profile: mumbai` (also `delhi`, `lucknow`, `bengaluru`, `kolkata`, `chennai`, `pune`, `jaipur`, `neutral_hindi`, …). Add a city by copying `configs/regional_profiles/hyderabad.yaml`.
 - Review after the trailer: `sample/screenplay_review.md` (original vs adapted, accent, direction, flags), `sample/audio_quality_report.json`, `screenplay_quality.json`.
 - Changing `localization.*` re-runs only character identity, scene analysis, localization and what depends on them (character images stay cached).
 

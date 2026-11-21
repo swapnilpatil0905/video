@@ -58,3 +58,6 @@ dist/
 
 # passphrase for data/cast_photos.zip.enc (never committed)
 .cast_passphrase
+
+# per-machine language choices (start.sh configure)
+projects/*/local.yaml

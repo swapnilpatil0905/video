@@ -73,6 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--rerun-stage", metavar="STAGE",
                    help="redo a stage and everything after it (e.g. after fixing a model that fell back)")
     g.add_argument("--regenerate-dialogue", metavar="SEGMENT_ID")
+    g.add_argument("--configure", action="store_true",
+                   help="save --region/--language/--slang for this project (projects/<id>/local.yaml) and show them")
+    g.add_argument("--region", help="regional profile: hyderabad, mumbai, delhi, lucknow, bengaluru, chennai, kolkata, "
+                                    "pune, jaipur, neutral_hindi, …")
+    g.add_argument("--language", help="hindi | hinglish | formal | dakhni")
+    g.add_argument("--slang", help="none | low | medium | high | max, or 0–1 (dialect intensity)")
     g.add_argument("--dry-run", action="store_true",
                    help="run every pending stage up to the trailer with simulated models (seconds; real cache untouched)")
 
@@ -660,6 +666,36 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_configure(args: argparse.Namespace) -> int:
+    from .storytelling.choices import available_regions, describe, localization_overrides, save_local
+
+    if args.project is None:
+        raise ConfigError("--project is required")
+    project_dir = Path(args.project).resolve().parent
+    overrides = localization_overrides(args.region, args.language, args.slang)
+    if overrides:
+        local = project_dir / "local.yaml"
+        previous = local.read_text(encoding="utf-8") if local.exists() else None
+        path = save_local(project_dir, overrides)
+        try:
+            ctx = build_context(args)  # validate the combined configuration
+        except PlatformError:
+            if previous is None:  # invalid combination: put the old choice back
+                local.unlink(missing_ok=True)
+            else:
+                local.write_text(previous, encoding="utf-8")
+            raise
+        print(f"saved to {path}")
+    else:
+        ctx = build_context(args)
+    print("language: " + describe(ctx.config.localization))
+    print("regions available: " + ", ".join(available_regions()))
+    if overrides:
+        print("next run re-does the language stages (character identity, scene analysis, screenplay, voices)"
+              + (" and the faces (they follow the characters' region)" if args.region else "") + ".")
+    return 0
+
+
 def cmd_dry_run(args: argparse.Namespace, ctx: Context) -> int:
     from .orchestration.dryrun import dry_run
 
@@ -705,6 +741,8 @@ def main(argv: list[str] | None = None) -> int:
             if getattr(args, flag):
                 raise NotImplementedYet("--" + flag.replace("_", "-") + " (needs the VPS approval service)", "M5-email")
 
+        if args.configure or args.region or args.language or args.slang:
+            return cmd_configure(args)
         ctx = build_context(args)
         if args.print_config:
             print(json.dumps(ctx.config.model_dump(mode="json"), indent=2, ensure_ascii=False))
