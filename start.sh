@@ -85,6 +85,7 @@ case "$CMD" in
     status)  run --status; run --approval-status ;;
     regen-shot) run --regenerate-shot "${2:?shot id, e.g. SH_00042}" ;;
     regen-line) run --regenerate-dialogue "${2:?segment id, e.g. SEG_000123}" ;;
+    rerun-stage) run --rerun-stage "${2:?stage name, e.g. active_speaker}" ;;
     setup)   setup ;;
     test)    setup; ./run.sh --test ;;
     smoke)

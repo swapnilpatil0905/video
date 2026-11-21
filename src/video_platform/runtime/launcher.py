@@ -188,6 +188,7 @@ def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: st
 
     def worker() -> None:
         os.environ.setdefault("HF_HOME", str(hf_home))
+        os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"  # keep the run log readable
         try:
             from huggingface_hub import HfApi, snapshot_download
         except ImportError:

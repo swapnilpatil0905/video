@@ -69,6 +69,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--stage", help="run (or --plan) a single stage and its prerequisites")
     g.add_argument("--resume", action="store_true", help="resume interrupted work")
     g.add_argument("--regenerate-shot", metavar="SHOT_ID")
+    g.add_argument("--rerun-stage", metavar="STAGE",
+                   help="redo a stage and everything after it (e.g. after fixing a model that fell back)")
     g.add_argument("--regenerate-dialogue", metavar="SEGMENT_ID")
 
     g = p.add_argument_group("approval (email workflow; see docs/specs/email-approval-workflow.md)")
@@ -439,6 +441,20 @@ def cmd_notify(args: argparse.Namespace, ctx: Context | None) -> int:
         return 0
 
 
+def cmd_rerun_stage(args: argparse.Namespace, ctx: Context, stage: str) -> int:
+    ctx.graph.get(stage)
+    expected = ctx.planner.expected_ids()
+    targets = [stage, *sorted(ctx.graph.descendants(stage))]
+    marked = []
+    for name in targets:
+        record = ctx.index.find_valid(expected[name])
+        if record:
+            ctx.index.set_status(record.artifact_id, "superseded")
+            marked.append(name)
+    _emit(args, {"rerun": marked}, f"Will redo on the next run: {', '.join(marked) or '(nothing cached)'}")
+    return 0
+
+
 def cmd_estimate(args: argparse.Namespace, ctx: Context) -> int:
     record = ctx.index.find_valid(ctx.planner.expected_ids()[SAMPLE_STAGE])
     if record is None:
@@ -605,6 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_decide(args, ctx, "STOP")
         if args.approval_status:
             return cmd_approval_status(args, ctx)
+        if args.rerun_stage:
+            return cmd_rerun_stage(args, ctx, args.rerun_stage)
         if args.regenerate_shot:
             return cmd_regenerate(args, ctx, "shot", args.regenerate_shot)
         if args.regenerate_dialogue:

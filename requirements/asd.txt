@@ -11,3 +11,5 @@ onnxruntime-gpu>=1.19
 insightface>=0.7.3
 nvidia-cudnn-cu12>=9,<10
 nvidia-cublas-cu12
+pandas
+tqdm
