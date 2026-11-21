@@ -108,7 +108,7 @@ case "$CMD" in
     watch)
         # live, filtered view of the run: stage start/finish, heartbeats, warnings, errors, pruning
         LOG="${2:-/workspace/run.log}"
-        tail -n 200 -F "$LOG" | grep --line-buffered -E "▶|✔|⏳|stage|WARNING|ERROR|Traceback|fallback|prun|prefetch|email|done \[" ;;
+        tail -n 200 -F "$LOG" | grep --line-buffered -E "▶|✔|⏳|↳|stage|WARNING|ERROR|Traceback|fallback|prun|prefetch|email|done \[" ;;
     progress)
         # one-shot snapshot: running stage, latest worker progress line, GPU, disk
         LOG="${2:-/workspace/run.log}"

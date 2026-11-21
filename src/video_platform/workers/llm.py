@@ -100,7 +100,8 @@ def run(request: dict) -> dict:
     pending = list(request["prompts"])
     results: dict = {}
     raw: dict = {}
-    stats = {"prompts": len(pending), "truncated": 0, "split": 0, "salvaged": 0, "failed": 0}
+    stats = {"prompts": len(pending), "truncated": 0, "split": 0, "salvaged": 0, "failed": 0, "empty": 0}
+    answers_log = request.get("answers_path")  # every raw answer, for debugging (jsonl)
     attempts = int(request.get("retries", 2)) + 1
     for attempt in range(attempts):
         if not pending:
@@ -113,8 +114,18 @@ def run(request: dict) -> dict:
         answers = generate(conversations)
         still, parsed = [], 0
         last = attempt == attempts - 1
+        if answers_log:
+            import json
+
+            with open(answers_log, "a", encoding="utf-8") as handle:
+                for prompt, (text, truncated) in zip(pending, answers):
+                    handle.write(json.dumps({"attempt": attempt + 1, "id": prompt["id"], "truncated": truncated,
+                                             "chars": len(text), "text": text}, ensure_ascii=False) + "\n")
+        for prompt, (text, _) in list(zip(pending, answers))[:2]:
+            print(f"[llm] sample answer {prompt['id']}: {' '.join(text.split())[:300]}", file=sys.stderr, flush=True)
         for prompt, (text, truncated) in zip(pending, answers):
             stats["truncated"] += int(truncated)
+            stats["empty"] += int(len(text.strip()) < 5)
             try:
                 results[prompt["id"]] = extract_json(text)
                 raw.pop(prompt["id"], None)

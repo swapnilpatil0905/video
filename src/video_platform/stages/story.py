@@ -27,12 +27,12 @@ def call_llm(s: StageContext, prompts: list[dict[str, str]], *, model_id: str | 
         "hf_repo": record.weights.hf_repo, "prompts": prompts, "backend": llm.backend,
         "max_model_len": llm.max_model_len, "max_tokens": max_tokens or llm.max_tokens, "temperature": llm.temperature,
         "tensor_parallel_size": llm.tensor_parallel_size, "gpu_memory_utilization": llm.gpu_memory_utilization,
-        "retries": 2,
+        "retries": 2, "answers_path": str(s.workdir / f"llm{'.' + tag if tag else ''}.answers.jsonl"),
     }, workdir=s.workdir, tag=tag)
     stats = response.get("stats") or {}
     if stats:
         prefix = f"llm_{tag}_" if tag else "llm_"
-        for key in ("prompts", "truncated", "split", "salvaged", "failed"):
+        for key in ("prompts", "truncated", "split", "salvaged", "failed", "empty"):
             s.metric(prefix + key, stats.get(key, 0))
     failed = [k for k, v in response["results"].items() if v is None]
     if failed:
@@ -81,7 +81,7 @@ def narrative(s: StageContext) -> None:
 
     out_chunks = []
     for i, chunk in enumerate(chunks):
-        r = results.get(f"chunk_{i:04d}") or {}
+        r = as_dict(results.get(f"chunk_{i:04d}"))
         out_chunks.append({
             "chunk_id": f"chunk_{i:04d}", "start_s": chunk[0]["start_s"], "end_s": chunk[-1]["end_s"],
             "segment_ids": [x["segment_id"] for x in chunk], "summary": r.get("summary", ""),
@@ -96,7 +96,7 @@ def narrative(s: StageContext) -> None:
         f"{p['character_id']}: tier={p['tier']}, speech={p['speech_s']}s, faces={p['face_count']}, "
         f"gender≈{p.get('gender')}, age≈{p.get('age_estimate')}" for p in profiles if p["tier"] != "background"
     )
-    overall = call_llm(s, [{
+    overall = as_dict(call_llm(s, [{
         "id": "global", "system": system,
         "user": (
             f"Chronological part summaries:\n{summaries}\n\nCharacters observed:\n{profile_text}\n\n"
@@ -105,7 +105,7 @@ def narrative(s: StageContext) -> None:
             '"relationships": [{"with": str, "relation": str}]}]} '
             f"Only use these character ids: {known}."
         ),
-    }]).get("global") or {}
+    }]).get("global"))
     s.put_json("narrative.json", {"chunks": out_chunks, "global": overall})
     s.metric("chunks", len(out_chunks))
     s.metric("chunks_failed", sum(c["status"] != "ok" for c in out_chunks))
@@ -145,7 +145,7 @@ def character_design(s: StageContext) -> None:
     results = call_llm(s, prompts) if prompts else {}
     designs = []
     for n, p in enumerate(to_design, 1):
-        d = results.get(p["character_id"]) or {}
+        d = as_dict(results.get(p["character_id"]))
         gender = d.get("gender") or p.get("gender") or "person"
         if not d:
             s.warn(f"design for {p['character_id']} failed; using a neutral fallback description")
@@ -220,9 +220,8 @@ def localization(s: StageContext) -> None:
     results = call_llm(s, prompts, max_tokens=s.config.localization.max_tokens)
     got = {}
     for r in results.values():
-        for x in (r or {}).get("lines", []) if isinstance(r, dict) else []:
-            if isinstance(x, dict) and x.get("id"):
-                got.setdefault(str(x["id"]).strip(), x)
+        for x in answer_items(r):
+            got.setdefault(str(x["id"]).strip(), x)
 
     localized, missing = [], []
     for chunk in chunks:
@@ -285,9 +284,9 @@ def polish_lines(s: StageContext, lines: list[dict], chunks: list[dict], names: 
         return lines, 0
     improved = {}
     for result in results.values():
-        for item in (result or {}).get("lines", []):
-            if isinstance(item, dict) and str(item.get("text", "")).strip():
-                improved[item.get("id")] = item
+        for item in answer_items(result):
+            if str(item.get("text", "")).strip():
+                improved[str(item["id"]).strip()] = item
     count = 0
     for line in lines:
         item = improved.get(line["segment_id"])
@@ -298,6 +297,28 @@ def polish_lines(s: StageContext, lines: list[dict], chunks: list[dict], names: 
             line["polished_by"] = model_id
             count += 1
     return lines, count
+
+
+def as_dict(result: Any) -> dict:
+    """An LLM answer as a dict ({} for null, a bare list or other shapes)."""
+    if isinstance(result, list) and len(result) == 1 and isinstance(result[0], dict):
+        return result[0]
+    return result if isinstance(result, dict) else {}
+
+
+def answer_items(result: Any) -> list[dict]:
+    """Line objects from an LLM answer: {"lines": [...]}, a bare list, or {"<any key>": [...]}."""
+    if isinstance(result, dict):
+        items = result.get("lines")
+        if items is None:
+            items = next((v for v in result.values() if isinstance(v, list)), [])
+            if not items and "id" in result:
+                items = [result]
+    elif isinstance(result, list):
+        items = result
+    else:
+        items = []
+    return [x for x in items if isinstance(x, dict) and x.get("id")]
 
 
 def batched(items: list, size: int) -> list[list]:

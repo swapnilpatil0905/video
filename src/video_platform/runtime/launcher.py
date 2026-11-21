@@ -203,6 +203,10 @@ class RuntimeRunner:
         suffix = f".{tag}" if tag else ""
         req = workdir / f"{worker}{suffix}.request.json"
         resp = workdir / f"{worker}{suffix}.response.json"
+        reused = reusable_response(req, resp, request)
+        if reused is not None:
+            log.info("reusing finished %s output from an earlier attempt (%s)", worker, resp.name)
+            return reused
         req.write_text(json.dumps(request, ensure_ascii=False, indent=1), encoding="utf-8")
         if resp.exists():
             resp.unlink()
@@ -216,6 +220,31 @@ class RuntimeRunner:
         if not resp.exists():
             raise StageFailure(f"worker {worker} produced no response file")
         return json.loads(resp.read_text(encoding="utf-8"))
+
+
+_REUSE_IGNORED_KEYS = {"split", "answers_path"}  # request details that do not change the answers already received
+
+
+def _canonical(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _canonical(v) for k, v in sorted(value.items()) if k not in _REUSE_IGNORED_KEYS}
+    if isinstance(value, list):
+        return [_canonical(v) for v in value]
+    return value
+
+
+def reusable_response(req: Path, resp: Path, request: dict[str, Any]) -> dict[str, Any] | None:
+    """The response of an identical, completed worker call in the same work dir (e.g. the stage
+    failed later, in code after the worker). Saves re-running long model calls."""
+    if not (req.exists() and resp.exists()):
+        return None
+    try:
+        if _canonical(json.loads(req.read_text(encoding="utf-8"))) != _canonical(request):
+            return None
+        out = json.loads(resp.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return out if isinstance(out, dict) and not out.get("fatal") else None
 
 
 def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: str | None = None):

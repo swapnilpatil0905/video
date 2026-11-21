@@ -574,6 +574,8 @@ class RuntimeSpec(StrictModel):
     weights_dir: str = "weights"
     worker_timeout_minutes: int = Field(default=720, ge=1)
     heartbeat_seconds: int = Field(default=60, ge=0, description="progress line in run.log while a model step runs (0 = off)")
+    log_outputs: bool = Field(default=True, description="after each stage: preview its outputs in run.log + state/logs/stages/")
+    log_output_items: int = Field(default=4, ge=1, le=50, description="sample items per output in run.log (report has 3x)")
     max_parallel_stages: int = Field(default=3, ge=1, description="independent pipeline stages run concurrently")
     prune_weights: Literal["auto", "always", "never"] = Field(
         default="auto",

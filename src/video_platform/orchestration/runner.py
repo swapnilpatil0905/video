@@ -312,6 +312,48 @@ class Runner:
         summary = ", ".join(f"{k}={m.value}" for k, m in list(sctx.metrics.items())[:8])
         log.info("✔ stage %s in %.1fs (%d warnings)%s", spec.name, time.time() - started, len(sctx.warnings),
                  f" — {summary}" if summary else "")
+        self._log_outputs(sctx, time.time() - started)
+
+    def _log_outputs(self, sctx: StageContext, seconds: float) -> None:
+        """Preview what the stage produced: '↳' lines in run.log, full report in state/logs/stages/."""
+        rt = self.ctx.loaded.config.runtime
+        if not getattr(rt, "log_outputs", True):
+            return
+        from .outputs import preview
+
+        n = int(getattr(rt, "log_output_items", 4))
+        name = sctx.spec.name
+        report = [f"stage {name} ({sctx.artifact_id}) in {seconds:.1f}s", "",
+                  "metrics: " + json.dumps({k: m.value for k, m in sctx.metrics.items()}, ensure_ascii=False, default=str),
+                  f"provenance: {json.dumps(sctx.provenance, ensure_ascii=False, default=str)[:2000]}",
+                  f"warnings ({len(sctx.warnings)}):", *[f"  - {w}" for w in sctx.warnings], "", "outputs:"]
+        for ref in sctx.outputs:
+            fname = (ref.uri or "").rsplit("/", 1)[-1]
+            try:
+                key = self.ctx.store.key_from_uri(ref.uri)
+                data = self.ctx.store.read_bytes(key) if fname.endswith(".json") else None
+                size = len(data) if data is not None else (
+                    self.ctx.store.materialize(key, sctx.cache_dir).stat().st_size if self.ctx.store.exists(key) else None)
+            except Exception:  # noqa: BLE001
+                data, size = None, None
+            size_txt = f"{size / 1e6:.2f} MB" if isinstance(size, (int, float)) else "?"
+            report.append(f"- {fname} ({size_txt})")
+            if data is None:
+                continue
+            try:
+                payload = json.loads(data)
+            except ValueError:
+                continue
+            short = preview(fname, payload, n)
+            for line in short[: n + 2]:
+                log.info("  ↳ %s %s: %s", name, fname, line)
+            report += [f"    {line}" for line in preview(fname, payload, n * 3)]
+        path = self.ctx.loaded.state_dir / "logs" / "stages" / f"{name}.txt"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("\n".join(report) + "\n", encoding="utf-8")
+        except OSError:
+            pass
 
     def _write_traceback(self, stage: str) -> Path:
         path = self.ctx.loaded.state_dir / "logs" / f"{stage}.traceback.txt"
