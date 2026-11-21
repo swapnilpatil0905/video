@@ -25,7 +25,7 @@ from .core.network_policy import DEFAULT_FORBIDDEN_HOST_PATTERNS, preflight
 from .approval.state import ApprovalStore
 from .migration.legacy import LegacyImporter, build_manifest, compare_manifests
 from .orchestration.runner import Runner
-from .runtime.launcher import RuntimeRunner, prune_hf_model
+from .runtime.launcher import RuntimeRunner, prune_hf_model, start_prefetch
 from .models.registry import ModelRegistry, check_usage_policy, verify_registry
 from .orchestration.graph import StageGraph, load_pipeline
 from .orchestration.planner import Planner
@@ -278,6 +278,18 @@ def cmd_execute(args: argparse.Namespace, ctx: Context) -> int:
             if freed > 1:
                 log.info("freed %.0f GB: %s weights are not needed for the rest of this run", freed, model_id)
 
+    if ctx.config.runtime.prefetch_weights:
+        upcoming: list[str] = []
+        for item in items:  # plan order = execution order
+            if item.status != "pending":
+                continue
+            for model_id in ctx.planner.model_ids(ctx.graph.get(item.stage)):
+                repo = ctx.registry.get(model_id).weights.hf_repo
+                if repo and repo not in upcoming:
+                    upcoming.append(repo)
+        if upcoming:
+            start_prefetch(Path(runtime.env("core")["HF_HOME"]), upcoming,
+                           ctx.config.runtime.prefetch_disk_reserve_gb, os.environ.get("HF_TOKEN"))
     try:
         executed = Runner(ctx, runtime, before_stage=before_stage, after_stage=after_stage).run(targets)
     except IllegalStateError:

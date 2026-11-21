@@ -177,6 +177,42 @@ class RuntimeRunner:
         return json.loads(resp.read_text(encoding="utf-8"))
 
 
+def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: str | None = None):
+    """Background thread: download upcoming models in stage order, while disk space allows.
+
+    Uses the shared Hugging Face cache (the stages find the files there; concurrent access is
+    coordinated by huggingface_hub's lock files). Stops at the first model that would not fit.
+    """
+    import shutil
+    import threading
+
+    def worker() -> None:
+        os.environ.setdefault("HF_HOME", str(hf_home))
+        try:
+            from huggingface_hub import HfApi, snapshot_download
+        except ImportError:
+            return
+        api = HfApi(token=token)
+        for repo in repos:
+            try:
+                folder = Path(hf_home) / "hub" / ("models--" + repo.replace("/", "--"))
+                info = api.model_info(repo, files_metadata=True)
+                size_gb = sum((s.size or 0) for s in (info.siblings or [])) / 1e9
+                cached_gb = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file()) / 1e9 if folder.exists() else 0
+                free_gb = shutil.disk_usage(hf_home).free / 1e9
+                if size_gb - cached_gb > free_gb - reserve_gb:
+                    log.info("prefetch paused before %s (%.0f GB needed, %.0f GB free)", repo, size_gb - cached_gb, free_gb)
+                    return
+                log.info("prefetching %s (%.0f GB) in the background", repo, size_gb)
+                snapshot_download(repo, max_workers=16, token=token)
+            except Exception as exc:  # noqa: BLE001 - prefetch is best effort
+                log.info("prefetch of %s skipped: %s", repo, str(exc)[:200])
+
+    thread = threading.Thread(target=worker, name="weight-prefetch", daemon=True)
+    thread.start()
+    return thread
+
+
 def prune_hf_model(hf_home: Path, repo_id: str) -> float:
     """Delete a model from the Hugging Face cache; returns GB freed (it re-downloads if needed again)."""
     import shutil

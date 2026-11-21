@@ -97,7 +97,7 @@ stages:
 
   - name: character_database
     version: "1"
-    depends_on: [face_clustering]
+    depends_on: [face_clustering, face_embedding, face_detection]
     runtime: cpu
     params_from: analysis.character_database
     outputs: [source_characters.json]

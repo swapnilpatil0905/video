@@ -573,6 +573,9 @@ class RuntimeSpec(StrictModel):
     max_parallel_stages: int = Field(default=3, ge=1, description="independent pipeline stages run concurrently")
     prune_weights_after_use: bool = Field(
         default=True, description="delete a model's downloaded weights once no remaining stage in the run needs it")
+    prefetch_weights: bool = Field(
+        default=True, description="download upcoming stages' models in the background while the GPU works")
+    prefetch_disk_reserve_gb: float = Field(default=50.0, ge=0, description="never prefetch into the last N GB")
 
 
 # ---------------------------------------------------------------------------
