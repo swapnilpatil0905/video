@@ -247,7 +247,49 @@ def cmd_execute(args: argparse.Namespace, ctx: Context) -> int:
     pid = ctx.loaded.project_id
     actor = _actor()
 
+    running: set[str] = set()
+    finished: set[str] = set()
+
+    def make_room(spec: Any) -> None:
+        """Before a stage: if its models must be downloaded and the disk is too full, delete cached weights
+        of models it does not need — first ones no later stage needs, then the ones needed last (they are
+        downloaded again when their stage comes). Never touches models of stages that are running."""
+        if ctx.config.runtime.prune_weights == "never":
+            return
+        hf_home = Path(runtime.env("core")["HF_HOME"])
+        mine = {ctx.registry.get(m).weights.hf_repo for m in ctx.planner.model_ids(spec)} - {None}
+        need = sum(max(0.0, repo_size(r) - hf_cached_gb(hf_home, r)) for r in mine)
+        reserve = min(ctx.config.runtime.prune_disk_reserve_gb, 20.0)
+        free = disk_free_gb(hf_home)
+        if need <= 0 or free - need >= reserve:
+            return
+        order = [st for st in pending if st not in finished and st != spec.name]
+        protected = set(mine)
+        for name in running:
+            protected |= {ctx.registry.get(m).weights.hf_repo for m in ctx.planner.model_ids(ctx.graph.get(name))}
+        next_use: dict[str, int] = {}
+        for index, name in enumerate(order):
+            for m in ctx.planner.model_ids(ctx.graph.get(name)):
+                next_use.setdefault(ctx.registry.get(m).weights.hf_repo, index)
+        known = {r.weights.hf_repo for r in ctx.registry if r.weights.hf_repo}
+        cached = [d.name.removeprefix("models--").replace("--", "/") for d in (hf_home / "hub").glob("models--*")]
+        candidates = [r for r in cached if r in known and r not in protected and hf_cached_gb(hf_home, r) > 0.5]
+        candidates.sort(key=lambda r: (r in next_use, -next_use.get(r, 0), -hf_cached_gb(hf_home, r)))
+        log.info("disk: %s needs %.0f GB of downloads, %.0f GB free — making room", spec.name, need, free)
+        for repo in candidates:
+            freed = prune_hf_model(hf_home, repo)
+            log.info("freed %.0f GB: deleted %s (%s)", freed, repo,
+                     f"needed again by {order[next_use[repo]]}, re-downloaded then" if repo in next_use else "not needed again")
+            if disk_free_gb(hf_home) - need >= reserve:
+                return
+        log.warning("disk: still only %.0f GB free for %.0f GB of %s downloads", disk_free_gb(hf_home), need, spec.name)
+
     def before_stage(spec: Any, artifact_id: str) -> None:
+        running.add(spec.name)
+        try:
+            make_room(spec)
+        except Exception as exc:  # noqa: BLE001 - disk housekeeping must never fail a stage
+            log.warning("disk: could not make room before %s: %s", spec.name, exc)
         state = approvals.state(pid)
         if spec.name == FULL_STAGE:
             if not _approved(ctx, approvals, ctx.config.production.profile):
@@ -276,6 +318,8 @@ def cmd_execute(args: argparse.Namespace, ctx: Context) -> int:
 
     def after_stage(spec: Any, remaining: list[str]) -> None:
         """Free disk only when needed: drop finished models' weights if the remaining stages would not fit."""
+        running.discard(spec.name)
+        finished.add(spec.name)
         mode = ctx.config.runtime.prune_weights
         if mode == "never":
             return

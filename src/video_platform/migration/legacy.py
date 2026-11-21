@@ -56,6 +56,7 @@ LEGACY_DIRS = (
     "characters", "timeline", "verification", "models", "pipeline",
 )
 _IGNORED_NAMES = {".DS_Store", "__pycache__"}
+_CAST_DIRS = {"male lead", "female lead", "male_lead", "female_lead"}  # personal cast photos, not legacy data
 
 # Parameters actually used by the legacy scripts (copied from their constants).
 # The configured values must equal these for a stage to be adopted.
@@ -165,9 +166,9 @@ def iter_legacy_files(root: Path) -> Iterator[Path]:
         if not base.exists():
             continue
         for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = sorted(d for d in dirnames if d not in _IGNORED_NAMES)
+            dirnames[:] = sorted(d for d in dirnames if d not in _IGNORED_NAMES and d.lower() not in _CAST_DIRS)
             for filename in sorted(filenames):
-                if filename not in _IGNORED_NAMES and not filename.endswith(".pyc"):
+                if filename not in _IGNORED_NAMES and not filename.endswith(".pyc") and not filename.startswith(".cast"):
                     yield Path(dirpath) / filename
 
 
