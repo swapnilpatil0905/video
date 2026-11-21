@@ -69,6 +69,24 @@ def gpu_summary() -> str:
         return "GPU n/a"
 
 
+GPU_HEAVY_RUNTIMES = {"llm", "image", "wan", "latentsync", "parler", "tts", "indicf5"}
+
+
+def gpu_busy_processes(min_mib: int = 2048) -> str:
+    """Processes holding GPU memory (pid, MiB, name), '' if none / no nvidia-smi."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_memory,process_name",
+                              "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10).stdout
+    except Exception:  # noqa: BLE001
+        return ""
+    rows = []
+    for line in out.splitlines():
+        parts = [x.strip() for x in line.split(",")]
+        if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) >= min_mib:
+            rows.append(f"pid {parts[0]} {int(parts[1]) / 1024:.0f} GB {parts[2] if len(parts) > 2 else ''}")
+    return "; ".join(rows)
+
+
 def _fmt_elapsed(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
     h, m = divmod(m, 60)
@@ -173,6 +191,11 @@ class RuntimeRunner:
         start = time.time()
         log.info("run [%s] %s (log: %s)", runtime, " ".join(argv[:4]) + (" …" if len(argv) > 4 else ""), log_path)
         heartbeat = float(getattr(self.spec, "heartbeat_seconds", 60) or 0)
+        if runtime in GPU_HEAVY_RUNTIMES:
+            busy = gpu_busy_processes()
+            if busy:
+                log.warning("GPU memory already in use before %s: %s — leftover model processes? "
+                            "Stop them with: bash start.sh stop", log_name, busy)
         with log_path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n$ (cwd={cwd}) {' '.join(argv)}\n")
             handle.flush()

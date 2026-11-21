@@ -111,8 +111,12 @@ case "$CMD" in
         pkill -f "video_platform.workers" || true
         pkill -f "bash start.sh (run|resume|approve|smoke)" || true
         pkill -f "bash scripts/setup_vast.sh" || true
+        sleep 3
+        # model engines run as separate processes (vLLM "VLLM::EngineCore", multiprocessing children)
+        pkill -9 -f "VLLM::|vllm.entrypoints|/workspace/vp/venvs/" 2>/dev/null || true
         sleep 2
-        ps aux | grep -E "run.py --project|video_platform.workers" | grep -v grep || echo "pipeline stopped"
+        ps aux | grep -E "run.py --project|video_platform.workers|VLLM::|/workspace/vp/venvs/" | grep -v grep || echo "pipeline stopped"
+        nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/GPU memory in use: /'
         ;;
     resume)
         setup
