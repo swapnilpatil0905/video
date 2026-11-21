@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import os
 import re
 import shutil
@@ -72,6 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--rerun-stage", metavar="STAGE",
                    help="redo a stage and everything after it (e.g. after fixing a model that fell back)")
     g.add_argument("--regenerate-dialogue", metavar="SEGMENT_ID")
+    g.add_argument("--dry-run", action="store_true",
+                   help="run every pending stage up to the trailer with simulated models (seconds; real cache untouched)")
 
     g = p.add_argument_group("approval (email workflow; see docs/specs/email-approval-workflow.md)")
     g.add_argument("--approve-sample", action="store_true", help="approve the current sample (audited)")
@@ -657,6 +660,24 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dry_run(args: argparse.Namespace, ctx: Context) -> int:
+    from .orchestration.dryrun import dry_run
+
+    started = time.time()
+    try:
+        result = dry_run(ctx)
+    except PlatformError as exc:
+        log.error("DRY RUN FAILED (fix this before the real run): %s", exc)
+        return exc.exit_code
+    except Exception as exc:  # noqa: BLE001 - any code error is exactly what the dry run is for
+        log.error("DRY RUN FAILED (fix this before the real run): %s: %s", type(exc).__name__, exc)
+        return 5
+    _emit(args, result, f"DRY RUN OK in {time.time() - started:.1f}s — stages: {', '.join(result['executed']) or 'none pending'}; "
+                        f"simulated worker calls: {result['worker_calls']}; warnings: {len(result['warnings'])} "
+                        f"(scratch: {result['scratch']})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(args.log_level, json_lines=False)
@@ -699,6 +720,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_decide(args, ctx, "STOP")
         if args.approval_status:
             return cmd_approval_status(args, ctx)
+        if args.dry_run:
+            return cmd_dry_run(args, ctx)
         if args.rerun_stage:
             return cmd_rerun_stage(args, ctx, args.rerun_stage)
         if args.regenerate_shot:

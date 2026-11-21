@@ -33,7 +33,10 @@ fi
 
 if [[ "${1:-}" == "--test" ]]; then
     shift
-    exec "$VENV/bin/python" -m pytest "$@"
+    if "$VENV/bin/python" -c "import pytest" 2>/dev/null; then
+        exec "$VENV/bin/python" -m pytest "$@"
+    fi
+    PYTHONPATH="$PWD/src" exec "$VENV/bin/python" scripts/minitest.py "$@"   # no pytest available: built-in runner
 fi
 
 PYTHON="${VP_PYTHON:-$VENV/bin/python}"

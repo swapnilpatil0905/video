@@ -170,6 +170,10 @@ class StageContext:
         raise StageFailure(f"{self.spec.name}: no output '{name}' written yet")
 
     def metric(self, name: str, value: Any, **kwargs: Any) -> None:
+        if isinstance(value, (dict, list, tuple, set)):  # structured values are stored as compact JSON text
+            value = json.dumps(sorted(value) if isinstance(value, set) else value, ensure_ascii=False, default=str)
+        elif value is not None and not isinstance(value, (bool, int, float, str)):
+            value = str(value)
         self.metrics[name] = Metric(value=value, **kwargs)
 
     def warn(self, message: str) -> None:

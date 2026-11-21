@@ -69,6 +69,12 @@ setup() {
                                     echo "Setup failed — fix the reported runtime and re-run: bash start.sh"; exit 1; }
 }
 
+dry_run() {  # every pending stage with simulated models: code / data-shape errors in seconds, not after hours
+    [[ "${VP_SKIP_DRYRUN:-0}" == "1" ]] && return 0
+    echo "== dry run (simulated models, real cache untouched)"
+    run --dry-run || { notify_failure "dry run failed — a code error was caught before any model loaded"; exit 1; }
+}
+
 sample_and_notify() {
     if run --mode analyze-and-sample; then
         run --notify sample || echo "(trailer is ready; the notification email could not be sent)"
@@ -93,6 +99,7 @@ case "$CMD" in
         setup
         migrate_if_legacy
         run --validate-only || { notify_failure "configuration invalid"; exit 1; }
+        dry_run
         sample_and_notify
         echo
         echo "Compare: $(dirname "$PROJECT")/sample/trailer_high.mp4  vs  trailer_balanced.mp4"
@@ -121,6 +128,7 @@ case "$CMD" in
     resume)
         setup
         migrate_if_legacy
+        dry_run
         if run --approval-status --json | grep -q '"approved": true'; then
             run --resume || { notify_failure "full production failed"; exit 1; }
         else
@@ -150,6 +158,7 @@ case "$CMD" in
         echo "== disk"; df -h /workspace 2>/dev/null | tail -n 1 ;;
     regen-shot) run --regenerate-shot "${2:?shot id, e.g. SH_00042}" ;;
     regen-line) run --regenerate-dialogue "${2:?segment id, e.g. SEG_000123}" ;;
+    dryrun)  run --dry-run ;;
     rerun-stage) run --rerun-stage "${2:?stage name, e.g. active_speaker}" ;;
     setup)   setup ;;
     test)    setup; ./run.sh --test ;;
@@ -166,5 +175,5 @@ case "$CMD" in
             --mode analyze-and-sample
         echo "Smoke trailers: $SMOKE/sample/trailer_high.mp4 and trailer_balanced.mp4 (+ comparison.json)"
         ;;
-    *) echo "unknown command '$CMD' (run|approve <profile>|reject|resume|stop|status|smoke|regen-shot|regen-line|rerun-stage|setup|test|notify-test|watch|progress)"; exit 2 ;;
+    *) echo "unknown command '$CMD' (run|approve <profile>|reject|resume|stop|status|smoke|regen-shot|regen-line|rerun-stage|setup|test|notify-test|watch|progress|dryrun)"; exit 2 ;;
 esac

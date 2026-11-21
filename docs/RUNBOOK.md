@@ -51,6 +51,7 @@ bash start.sh notify-test       # "[mail] sent" → check your inbox (and spam)
 ```bash
 nohup bash start.sh > /workspace/run.log 2>&1 &
 tail -f /workspace/run.log      # Ctrl+C stops watching; the run continues
+bash start.sh dryrun            # every pending stage with simulated models (seconds) — also runs automatically first
 bash start.sh watch             # filtered live view: stages, ⏳ heartbeats, warnings, errors
 bash start.sh progress          # one-shot snapshot: current stage, worker progress, GPU, disk
 ```
