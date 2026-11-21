@@ -229,7 +229,8 @@ class FakeRuntime:
         self.calls: dict[str, int] = {}
         self.emb: dict[str, list[float]] = {}      # image path → simulated face embedding
         self.derived: dict[str, tuple[str, float]] = {}  # output path → (reference path, similarity)
-        self.cast_ref: list[float] | None = None
+        self.cast_ref: dict[str, list[float]] = {}   # cast member → simulated identity
+        self.photo_owner: dict[str, str] = {}           # photo key → cast member
 
     gpu_memory_gb = 96.0
 
@@ -241,23 +242,36 @@ class FakeRuntime:
         """Work-dir and artifact-store copies of an item share their last path parts."""
         return "/".join(Path(path).parts[-3:])
 
-    def embedding(self, path: str, cast: bool = False) -> list[float]:
+    def _mix(self, base_vec, seed: str, t: float) -> list[float]:
+        import numpy as np
+
+        base = np.asarray(base_vec, dtype="float32")
+        noise = np.asarray(_vec(seed), dtype="float32")
+        noise -= base * float(np.dot(noise, base))
+        noise /= np.linalg.norm(noise) + 1e-9
+        return (base * t + noise * (1 - t * t) ** 0.5).tolist()
+
+    def embedding(self, path: str, owner: str | None = None) -> list[float]:
         import numpy as np
 
         path = self._key(path)
         if path in self.emb:
             return self.emb[path]
+        if owner is not None:  # every photo of one cast member is the same person (small variation)
+            self.photo_owner[path] = owner
+            identity = self.cast_ref.setdefault(owner, _vec("cast:" + owner))
+            self.emb[path] = self._mix(identity, "photo" + path, 0.97)
+            return self.emb[path]
         if path in self.derived:
             ref, t = self.derived[path]
-            base = np.asarray(self.cast_ref if ref == "@cast" else self.embedding(ref), dtype="float32")
+            base = np.asarray(self.cast_ref.get(ref[6:], _vec(ref)) if ref.startswith("@cast:") else self.embedding(ref),
+                              dtype="float32")
             noise = np.asarray(_vec("noise" + path), dtype="float32")
             noise -= base * float(np.dot(noise, base))
             noise /= np.linalg.norm(noise) + 1e-9
             emb = (base * t + noise * (1 - t * t) ** 0.5).tolist()
         else:
             emb = _vec(path)
-        if cast:
-            self.cast_ref = emb
         self.emb[path] = emb
         return emb
 
@@ -273,7 +287,8 @@ class FakeRuntime:
         if worker == "faces" and request.get("mode") == "identity":
             out = {"embeddings": {}, "face_ratio": {}, "det_score": {}, "face_count": {}, "all_faces": {}}
             for item in request["images"]:
-                emb = self.embedding(item["path"], cast=item["id"].startswith("cast|"))
+                owner = item["id"].split("|")[1] if item["id"].startswith("cast|") else None
+                emb = self.embedding(item["path"], owner=owner)
                 out["embeddings"][item["id"]] = emb
                 out["face_ratio"][item["id"]], out["det_score"][item["id"]], out["face_count"][item["id"]] = 0.3, 0.9, 1
                 if item.get("face") == "auto":
@@ -289,7 +304,8 @@ class FakeRuntime:
                     if j.get("blend"):
                         _png(j["blend"]["out"])
                         r["blend"] = j["blend"]["out"]
-                        self.derived[self._key(j["blend"]["out"])] = ("@cast", 0.42)  # a new person resembling the cast member
+                        owner = self.photo_owner.get(self._key(j["blend"]["photos"][0]), "")
+                        self.derived[self._key(j["blend"]["out"])] = ("@cast:" + owner, 0.42)  # resembles, not identical
                     results[j["id"]] = r
             else:
                 for j in request["jobs"]:

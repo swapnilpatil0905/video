@@ -62,10 +62,13 @@ def test_dry_run_all_story_and_asset_stages(tmp_path, monkeypatch, repo_root):
     cfg["project"]["id"] = "dry"
     cfg.setdefault("production", {}).setdefault("character_images", {})["cast_folders"] = {"enabled": False}
     # a consenting cast member from a solo photo, to exercise the blend path
-    photo = tmp_path / "me.jpg"
-    photo.write_bytes(b"jpeg")
+    photos = []
+    for i in range(4):  # several photos of one person, like the real cast folders
+        photo = tmp_path / f"me_{i}.jpg"
+        photo.write_bytes(b"jpeg" + bytes([i]))
+        photos.append({"path": str(photo), "face": "auto"})
     cfg["production"]["character_images"]["cast"] = [{
-        "name": "me", "character": "lead_male", "photos": [{"path": str(photo)}],
+        "name": "me", "character": "lead_male", "photos": photos,
         "consent": {"given_by": "self", "date": "2026-11-22"}}]
     (project / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
 
