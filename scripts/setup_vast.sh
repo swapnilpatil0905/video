@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RT="${VP_RUNTIME_ROOT:-/workspace/vp}"
 LOGS="$RT/logs"
 mkdir -p "$RT"/{venvs,repos,weights,hf} "$LOGS"
-export HF_HOME="$RT/hf"
+export HF_HOME="${VP_HF_HOME:-$RT/hf}"
 export UV_INDEX_URL="https://pypi.org/simple" UV_DEFAULT_INDEX="https://pypi.org/simple"
 export PIP_INDEX_URL="https://pypi.org/simple" UV_PYTHON_PREFERENCE="managed" UV_LINK_MODE="copy"
 unset PIP_EXTRA_INDEX_URL UV_EXTRA_INDEX_URL || true

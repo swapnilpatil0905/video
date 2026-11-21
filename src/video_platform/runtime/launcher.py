@@ -151,7 +151,7 @@ class RuntimeRunner:
 
     def env(self, runtime: str) -> dict[str, str]:
         env = dict(os.environ)
-        env.setdefault("HF_HOME", str(self.root / "hf"))
+        env["HF_HOME"] = os.environ.get("VP_HF_HOME") or str(self.root / "hf")  # one cache, whatever the template sets
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(SRC_DIR), env.get("PYTHONPATH", "")]))
         env["PYTHONUNBUFFERED"] = "1"
         env["VP_DEVICE"] = self.spec.device
@@ -240,9 +240,7 @@ def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: st
                 folder = Path(hf_home) / "hub" / ("models--" + repo.replace("/", "--"))
                 info = api.model_info(repo, files_metadata=True)
                 size_gb = sum((s.size or 0) for s in (info.siblings or [])) / 1e9
-                cached_gb = sum(f.stat().st_size for f in (folder / "blobs").rglob("*")
-                                if f.is_file() and not f.is_symlink() and not f.name.endswith(".incomplete")) / 1e9 \
-                    if (folder / "blobs").exists() else 0
+                cached_gb = hf_cached_gb(Path(hf_home), repo)
                 free_gb = shutil.disk_usage(hf_home).free / 1e9
                 if cached_gb >= size_gb * 0.99:
                     log.info("prefetch: %s already cached (%.0f GB)", repo, cached_gb)
@@ -260,13 +258,31 @@ def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: st
     return thread
 
 
+def _repo_folder(hf_home: Path, repo_id: str) -> Path:
+    return Path(hf_home) / "hub" / ("models--" + repo_id.replace("/", "--"))
+
+
+def _real_files(folder: Path) -> set[Path]:
+    """Real files behind a cached repo. Follows symlinks: newer huggingface_hub versions keep the
+    data in a shared store (hub/blobs/xx/<hash>) and the repo folder holds only links to it."""
+    found: set[Path] = set()
+    if not folder.exists():
+        return found
+    for f in folder.rglob("*"):
+        if f.name.endswith(".incomplete"):
+            continue
+        try:
+            real = f.resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue  # dangling link
+        if real.is_file():
+            found.add(real)
+    return found
+
+
 def hf_cached_gb(hf_home: Path, repo_id: str) -> float:
-    """Size of a model's finished files in the Hugging Face cache (GB)."""
-    blobs = Path(hf_home) / "hub" / ("models--" + repo_id.replace("/", "--")) / "blobs"
-    if not blobs.exists():
-        return 0.0
-    return sum(f.stat().st_size for f in blobs.iterdir()
-               if f.is_file() and not f.is_symlink() and not f.name.endswith(".incomplete")) / 1e9
+    """Size of a model's finished files in the Hugging Face cache (GB), counting each file once."""
+    return sum(f.stat().st_size for f in _real_files(_repo_folder(hf_home, repo_id))) / 1e9
 
 
 def hf_repo_gb(repo_id: str, token: str | None = None) -> float | None:
@@ -290,12 +306,25 @@ def prune_hf_model(hf_home: Path, repo_id: str) -> float:
     """Delete a model from the Hugging Face cache; returns GB freed (it re-downloads if needed again)."""
     import shutil
 
-    folder = Path(hf_home) / "hub" / ("models--" + repo_id.replace("/", "--"))
+    folder = _repo_folder(hf_home, repo_id)
     if not folder.exists():
         return 0.0
-    size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file() and not f.is_symlink())
+    mine = _real_files(folder)
+    shared: set[Path] = set()  # files another cached repo also links to stay
+    for other in (Path(hf_home) / "hub").glob("models--*"):
+        if other != folder:
+            shared |= _real_files(other)
+    root = Path(hf_home).resolve()
+    freed = 0
+    for real in mine - shared:
+        if root in real.parents or real.is_relative_to(folder.resolve()):
+            try:
+                freed += real.stat().st_size
+                real.unlink()
+            except OSError:
+                pass
     shutil.rmtree(folder, ignore_errors=True)
-    return size / 1e9
+    return freed / 1e9
 
 
 def fill_template(template: list[str], values: dict[str, Any]) -> list[str]:

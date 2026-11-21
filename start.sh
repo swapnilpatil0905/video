@@ -17,7 +17,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 chmod +x run.sh run.py scripts/*.sh 2>/dev/null || true
 [[ -f .env ]] && { set -a; source .env; set +a; }
 export VP_RUNTIME_ROOT="${VP_RUNTIME_ROOT:-/workspace/vp}"
-export HF_HOME="${HF_HOME:-$VP_RUNTIME_ROOT/hf}"
+# one model cache for setup, prefetch and every stage. Cloud templates often preset HF_HOME
+# elsewhere (e.g. /workspace/.hf_home), which would split downloads across two caches.
+export HF_HOME="${VP_HF_HOME:-$VP_RUNTIME_ROOT/hf}"
 
 PROJECT="${PROJECT:-projects/project_001/config.yaml}"
 CMD="${1:-run}"
