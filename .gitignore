@@ -51,3 +51,4 @@ cloud-pilot-mcp.log
 *.log
 verification_report/
 dist/
+/video/
