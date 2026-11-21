@@ -245,6 +245,9 @@ VP_GPU_PRICE_PER_HOUR=1.80   # your Vast.ai $/h → fills the cost estimate
 | Shots fall back to source footage | `wan_generate.log`. Command-line flags differ between Wan releases; adjust `production.video.*_command` in the config. |
 | Lip-sync failed | `latentsync.log`. Adjust `production.lipsync.command`. |
 | Out of GPU memory | Use an 80 GB GPU, or set `production.llm.model: qwen3-14b` (default) and keep a single instance. |
+| Disk fills up, or "prefetch paused" for a model you already downloaded | A second model cache (the Vast template presets `HF_HOME=/workspace/.hf_home`). The pipeline always uses `/workspace/vp/hf`; setup warns if another cache holds data. Free it: `rm -rf /workspace/.hf_home && ln -s /workspace/vp/hf /workspace/.hf_home`. |
+| `LLM returned unusable output` / many `missing` lines | Answers were cut off. Lower `localization.batch_lines` (default 12) or raise `localization.max_tokens` (default 8192). The worker log shows `[llm] attempt …: parsed / truncated / split` per pass. |
+| LLM stages slow (low tokens/s) | On a 96 GB GPU the bf16 Qwen3-32B leaves ~17 GB for the KV cache. `production.llm.model: qwen3-32b-fp8` halves weights (~33 GB) and runs far more prompts at once. Changing it re-runs the story stages. |
 
 ## Honest limitations
 

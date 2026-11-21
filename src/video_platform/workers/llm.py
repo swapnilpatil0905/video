@@ -2,7 +2,12 @@
 
 Request: {"hf_repo", "prompts": [{"id","system","user"}], "max_model_len", "max_tokens",
           "temperature", "tensor_parallel_size", "gpu_memory_utilization", "backend", "retries"}
-Response: {"results": {id: parsed JSON | null}, "raw": {id: text for failures}}
+Response: {"results": {id: parsed JSON | null}, "raw": {id: text for failures}, "stats": {...}}
+
+A prompt may carry "split": [smaller prompts]. If its answer is cut off or unparseable, the
+smaller prompts run in the next attempt with the already loaded model (no reload, no retry at
+the same size). Without "split", a cut-off answer is salvaged at once (complete items kept)
+instead of being retried with the same token budget, which would be cut off again.
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ def _vllm_generate(request: dict):
             outputs = llm.chat(conversations, params, chat_template_kwargs={"enable_thinking": False})
         except TypeError:
             outputs = llm.chat(conversations, params)
-        return [o.outputs[0].text for o in outputs]
+        return [(o.outputs[0].text, o.outputs[0].finish_reason == "length") for o in outputs]
 
     return generate
 
@@ -54,7 +59,8 @@ def _transformers_generate(request: dict):
             with torch.no_grad():
                 out = model.generate(**inputs, max_new_tokens=request["max_tokens"],
                                      do_sample=request["temperature"] > 0, temperature=max(request["temperature"], 1e-3))
-            texts.append(tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
+            new = out[0][inputs["input_ids"].shape[1]:]
+            texts.append((tokenizer.decode(new, skip_special_tokens=True), len(new) >= request["max_tokens"]))
         return texts
 
     return generate
@@ -94,6 +100,7 @@ def run(request: dict) -> dict:
     pending = list(request["prompts"])
     results: dict = {}
     raw: dict = {}
+    stats = {"prompts": len(pending), "truncated": 0, "split": 0, "salvaged": 0, "failed": 0}
     attempts = int(request.get("retries", 2)) + 1
     for attempt in range(attempts):
         if not pending:
@@ -103,24 +110,37 @@ def run(request: dict) -> dict:
              {"role": "user", "content": p["user"] + (_STRICT if attempt else "")}]
             for p in pending
         ]
-        texts = generate(conversations)
-        still = []
-        for prompt, text in zip(pending, texts):
+        answers = generate(conversations)
+        still, parsed = [], 0
+        last = attempt == attempts - 1
+        for prompt, (text, truncated) in zip(pending, answers):
+            stats["truncated"] += int(truncated)
             try:
                 results[prompt["id"]] = extract_json(text)
                 raw.pop(prompt["id"], None)
+                parsed += 1
+                continue
             except ValueError:
-                salvaged = salvage_lines(text) if attempt == attempts - 1 else None
-                if salvaged:
-                    results[prompt["id"]] = salvaged
-                    print(f"[llm] {prompt['id']}: answer cut off, kept {len(salvaged['lines'])} complete lines",
-                          file=sys.stderr, flush=True)
-                    continue
+                pass
+            salvaged = salvage_lines(text) if (truncated or last) else None
+            if salvaged:
+                results[prompt["id"]] = salvaged
+                stats["salvaged"] += 1
+            if prompt.get("split") and not last:
+                still.extend(prompt["split"])  # smaller prompts, same loaded model
+                stats["split"] += 1
+            elif truncated and salvaged:
+                pass  # retrying at the same size would be cut off again
+            elif not last:
                 raw[prompt["id"]] = text[-2000:]
                 still.append(prompt)
-        print(f"[llm] attempt {attempt + 1}/{attempts}: {len(pending) - len(still)}/{len(pending)} prompts parsed",
-              file=sys.stderr, flush=True)
+            else:
+                raw[prompt["id"]] = text[-2000:]
+        print(f"[llm] attempt {attempt + 1}/{attempts}: {parsed}/{len(pending)} parsed, "
+              f"{len(still)} to retry (truncated so far {stats['truncated']}, split {stats['split']}, "
+              f"salvaged {stats['salvaged']})", file=sys.stderr, flush=True)
         pending = still
     for prompt in pending:
-        results[prompt["id"]] = None
-    return {"results": results, "raw": raw}
+        results.setdefault(prompt["id"], None)
+    stats["failed"] = sum(v is None for v in results.values())
+    return {"results": results, "raw": raw, "stats": stats}

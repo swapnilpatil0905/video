@@ -43,6 +43,15 @@ if want system; then
     fi
     FREE_GB=$(df -BG --output=avail "$RT" | tail -1 | tr -dc '0-9')
     (( FREE_GB < 300 )) && say "WARNING: ${FREE_GB} GB free under $RT; ~300 GB recommended (model weights + renders)"
+    # a second Hugging Face cache (cloud templates often preset one) silently doubles model storage
+    for other in /workspace/.hf_home "$HOME/.cache/huggingface"; do
+        if [[ -d "$other/hub" && ! -L "$other" && "$(readlink -f "$other")" != "$(readlink -f "$HF_HOME")" ]]; then
+            OTHER_GB=$(du -s "$other/hub" 2>/dev/null | awk '{print int($1/1048576)}')
+            if (( OTHER_GB >= 1 )); then
+                say "WARNING: second model cache $other holds ${OTHER_GB} GB (this pipeline uses $HF_HOME). Free it: rm -rf $other && ln -s $HF_HOME $other"
+            fi
+        fi
+    done
 fi
 
 # ---- uv (fast, isolated Python environments) -----------------------------------

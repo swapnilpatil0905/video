@@ -29,6 +29,11 @@ def call_llm(s: StageContext, prompts: list[dict[str, str]], *, model_id: str | 
         "tensor_parallel_size": llm.tensor_parallel_size, "gpu_memory_utilization": llm.gpu_memory_utilization,
         "retries": 2,
     }, workdir=s.workdir, tag=tag)
+    stats = response.get("stats") or {}
+    if stats:
+        prefix = f"llm_{tag}_" if tag else "llm_"
+        for key in ("prompts", "truncated", "split", "salvaged", "failed"):
+            s.metric(prefix + key, stats.get(key, 0))
     failed = [k for k, v in response["results"].items() if v is None]
     if failed:
         s.warn(f"LLM returned unusable output for {len(failed)} prompt(s): {failed[:10]}")
@@ -183,26 +188,35 @@ def localization(s: StageContext) -> None:
     )
     chunks = story["chunks"]
     by_id = {seg["segment_id"]: seg for seg in segments}
-    prompts = []
     batch = s.config.localization.batch_lines
+
+    def make_prompt(i: int, chunk: dict, part: list[str], pid: str) -> dict:
+        lines = []
+        for sid in part:
+            seg = by_id[sid]
+            char = speaker_char.get(seg.get("speaker_id") or "")
+            who = names.get(char or "", seg.get("speaker_id") or "UNKNOWN")
+            emo = emotions.get(sid, {}).get("emotion", "unknown")
+            lines.append(f"{sid} | {who} | {seg['end_s'] - seg['start_s']:.1f}s | {emo} | {seg['text']}")
+        previous = chunks[i - 1]["summary"] if i else ""
+        return {"id": pid, "system": system, "user": (
+            f"Story synopsis: {story.get('global', {}).get('synopsis', '')[:1200]}\n"
+            f"Previous part: {previous}\nThis part: {chunk['summary']}\nName glossary:\n{glossary}\n\n"
+            f"Lines (id | speaker | available seconds | detected emotion | {src} text):\n" + "\n".join(lines) +
+            f'\n\nReturn JSON: {{"lines": [{{"id": str, "text": str ({tgt}, natural), "short": str (shorter {tgt} '
+            'version that fits the available seconds, same meaning), "emotion": str, "delivery": str (how to say it)}]}. '
+            "Include every id exactly once."
+        )}
+
+    prompts = []
+    small = max(3, batch // 3)
     for i, chunk in enumerate(chunks):
         for j, part in enumerate(batched(chunk["segment_ids"], batch)):
-            lines = []
-            for sid in part:
-                seg = by_id[sid]
-                char = speaker_char.get(seg.get("speaker_id") or "")
-                who = names.get(char or "", seg.get("speaker_id") or "UNKNOWN")
-                emo = emotions.get(sid, {}).get("emotion", "unknown")
-                lines.append(f"{sid} | {who} | {seg['end_s'] - seg['start_s']:.1f}s | {emo} | {seg['text']}")
-            previous = chunks[i - 1]["summary"] if i else ""
-            prompts.append({"id": f"{chunk['chunk_id']}_p{j}", "system": system, "user": (
-                f"Story synopsis: {story.get('global', {}).get('synopsis', '')[:1200]}\n"
-                f"Previous part: {previous}\nThis part: {chunk['summary']}\nName glossary:\n{glossary}\n\n"
-                f"Lines (id | speaker | available seconds | detected emotion | {src} text):\n" + "\n".join(lines) +
-                f'\n\nReturn JSON: {{"lines": [{{"id": str, "text": str ({tgt}, natural), "short": str (shorter {tgt} '
-                'version that fits the available seconds, same meaning), "emotion": str, "delivery": str (how to say it)}]}. '
-                "Include every id exactly once."
-            )})
+            pid = f"{chunk['chunk_id']}_p{j}"
+            prompt = make_prompt(i, chunk, part, pid)
+            if len(part) > small:  # if the answer is cut off, the worker re-asks in smaller pieces
+                prompt["split"] = [make_prompt(i, chunk, sub, f"{pid}_s{k}") for k, sub in enumerate(batched(part, small))]
+            prompts.append(prompt)
     results = call_llm(s, prompts, max_tokens=s.config.localization.max_tokens)
     got = {}
     for r in results.values():
