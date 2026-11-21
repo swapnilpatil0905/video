@@ -1,0 +1,7 @@
+model_id: sam2.1-hiera-large
+name: SAM 2.1 Hiera Large
+tasks: [video_segmentation]
+repository: https://github.com/facebookresearch/sam2
+weights: {hf_repo: facebook/sam2.1-hiera-large}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/facebookresearch/sam2]}
+hardware: {runtimes: [cuda], min_vram_gb: 8, recommended_vram_gb: 16}

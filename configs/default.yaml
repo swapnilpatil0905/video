@@ -1,0 +1,41 @@
+# Platform-wide defaults. Every project config is merged on top of this file.
+#
+# Field definitions, types, validation and built-in defaults live in
+# src/video_platform/config/schema.py (single source of truth). Print them with:
+#   ./run.sh --config-schema
+# Print a project's effective (merged) configuration with:
+#   ./run.sh --project projects/<id>/config.yaml --print-config
+#
+# Only list values here that intentionally differ from the schema defaults, or that
+# you want visible at a glance.
+
+licensing:
+  usage: personal_learning
+
+rights:
+  purpose: self_improvement_learning
+  distribution: private
+
+storage:
+  provider: local
+  root: artifacts
+
+compute:
+  provider: local
+  launcher: manual
+  max_instances: 1
+  max_price_per_hour_usd: null   # open
+  idle_destroy_minutes: 10
+
+budget:
+  max_total_spend_usd: null      # open (no cap) — set a number to enforce a hard cap
+  max_sample_spend_usd: null     # open (no cap)
+
+packages:
+  pip_index_url: https://pypi.org/simple
+  container_registries: [docker.io, ghcr.io, nvcr.io, quay.io]
+  model_hubs: [huggingface.co, github.com]
+  forbid_hosts_matching: []      # add hosts to avoid, e.g. ["*.corp.example"]
+
+runtime:
+  root: "${VP_RUNTIME_ROOT:-/workspace/vp}"   # per-model environments, repos and weights (scripts/setup_vast.sh)

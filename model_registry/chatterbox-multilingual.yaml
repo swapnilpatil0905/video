@@ -1,0 +1,8 @@
+model_id: chatterbox-multilingual
+name: Chatterbox Multilingual (Resemble AI)
+tasks: [tts]
+repository: https://github.com/resemble-ai/chatterbox
+weights: {hf_repo: ResembleAI/chatterbox}
+licence: {code: MIT, weights: MIT, personal_use: "yes", commercial_use: "yes", notes: Output carries a built-in PerTh watermark. Keep it on., sources: [https://huggingface.co/ResembleAI/chatterbox]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 4, recommended_vram_gb: 8}

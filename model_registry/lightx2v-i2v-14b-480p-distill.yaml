@@ -1,0 +1,11 @@
+model_id: lightx2v-i2v-14b-480p-distill
+name: LightX2V step/CFG-distillation LoRA for Wan 14B I2V (used with Wan2.2-Animate for 4-step sampling)
+tasks: [video_generation_acceleration]
+status: candidate
+repository: https://github.com/ModelTC/LightX2V
+weights:
+  hf_repo: Kijai/WanVideo_comfy
+  files: [Lightx2v/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors]
+licence: {code: Apache-2.0, weights: unknown, personal_use: "yes", commercial_use: unknown, notes: "Community-converted LoRA. Verify the file name and licence on the model page; if it differs, edit weights.files.", sources: [https://huggingface.co/Kijai/WanVideo_comfy, https://huggingface.co/lightx2v]}
+hardware: {runtimes: [cuda], min_vram_gb: 1}
+known_limitations: ["Trained for Wan 14B I2V; compatibility with Animate weights is checked at load time (merged keys counted). Falls back to full steps if nothing matches."]

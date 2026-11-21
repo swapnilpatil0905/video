@@ -1,0 +1,39 @@
+# Project template. Create a new project with:
+#   ./run.sh --init projects/<new_id>
+# then edit this file and place the source video under input/.
+schema_version: 1
+
+project:
+  id: __PROJECT_ID__
+  name: __PROJECT_NAME__
+  project_type: full_remake               # see `./run.sh --config-schema` for all project types
+  source_video: input/source.mp4
+
+languages:
+  source: en                              # BCP-47 language codes
+  target: hi
+  target_region: null
+
+audio:
+  target_language: hi                     # must equal languages.target
+
+video:
+  target_resolution: 1080x1920
+  target_fps: 30
+  target_aspect_ratio: "9:16"
+
+sample:
+  enabled: true
+  duration_seconds: 90
+
+rights:
+  purpose: self_improvement_learning
+  distribution: private
+  reuse_source_footage: false
+  reuse_source_music_and_effects: false
+
+# analysis: {}        # defaults come from the schema (faster-whisper, pyannote, YuNet, InsightFace, ...)
+
+notifications:
+  enabled: false
+  # approval_email: you@example.com      # or pass --email on the command line

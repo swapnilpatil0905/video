@@ -1,0 +1,9 @@
+model_id: sensevoice-small
+name: SenseVoiceSmall (ASR + speech emotion + audio events)
+tasks: [emotion, audio_events]
+status: selected
+repository: https://github.com/FunAudioLLM/SenseVoice
+weights: {hf_repo: FunAudioLLM/SenseVoiceSmall}
+licence: {code: unknown, weights: unknown, personal_use: "yes", commercial_use: unknown, notes: Read the model card licence (FunASR model licence), sources: [https://huggingface.co/FunAudioLLM/SenseVoiceSmall]}
+supported_languages: [zh, en, yue, ja, ko]
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 2}

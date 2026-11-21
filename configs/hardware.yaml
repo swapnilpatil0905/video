@@ -1,0 +1,34 @@
+# Per-runtime hardware requirements used by the Vast.ai launcher (M9) and the planner's
+# resource estimates. Values are planning figures until measured by the benchmark harness.
+schema_version: 1
+
+runtimes:
+  cpu:
+    min_vram_gb: 0
+  analysis-gpu:
+    min_vram_gb: 16
+    preferred_gpu_classes: [RTX_4090, RTX_5090, L40S]
+    disk_gb: 150
+    cuda_min: "12.1"
+  llm-gpu:
+    min_vram_gb: 48
+    preferred_gpu_classes: [L40S, RTX_A6000, A100_80GB, H100_80GB]
+    disk_gb: 200
+    cuda_min: "12.1"
+  generation-gpu:
+    min_vram_gb: 80
+    preferred_gpu_classes: [A100_80GB, H100_80GB, H200]
+    disk_gb: 300
+    cuda_min: "12.1"
+  audio-gpu:
+    min_vram_gb: 12
+    preferred_gpu_classes: [RTX_4090, RTX_5090]
+    disk_gb: 100
+    cuda_min: "12.1"
+
+vastai:
+  # Personal account. API key comes from VAST_API_KEY (environment / .env), never from config.
+  require_verified_hosts: true
+  min_reliability: 0.98
+  min_inet_down_mbps: 500
+  container_registries: [docker.io, ghcr.io]

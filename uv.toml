@@ -1,0 +1,4 @@
+# Project-local uv configuration: public PyPI only.
+[[index]]
+url = "https://pypi.org/simple"
+default = true

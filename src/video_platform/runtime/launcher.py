@@ -1,0 +1,181 @@
+"""Run model work in per-model environments ("runtimes") as subprocesses.
+
+Different models pin incompatible torch/transformers versions, so each runtime family
+has its own virtualenv (created by scripts/setup_vast.sh under ``runtime.root/venvs``).
+Workers exchange JSON files; each subprocess exits after its batch, which frees GPU
+memory before the next model loads.
+"""
+
+from __future__ import annotations
+
+import glob
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from ..core.errors import ConfigError, StageFailure
+from ..core.log import get_logger
+
+log = get_logger(__name__)
+
+SRC_DIR = Path(__file__).resolve().parents[2]  # .../src
+
+# runtime family → venv directory name
+RUNTIME_VENVS = {
+    "core": None,          # the platform's own interpreter
+    "diar": "diar",        # pyannote.audio
+    "audio": "audio",      # demucs, funasr (SenseVoice)
+    "llm": "llm",          # vLLM
+    "parler": "parler",    # Indic Parler-TTS
+    "tts": "tts",          # Chatterbox
+    "image": "image",      # diffusers (Qwen-Image)
+    "wan": "wan",          # Wan2.2 repository requirements
+    "latentsync": "latentsync",
+}
+
+
+def detect_gpu_memory_gb() -> float:
+    """Total memory of GPU 0 in GB (0 when no NVIDIA GPU is visible)."""
+    if os.environ.get("VP_GPU_MEMORY_GB"):
+        return float(os.environ["VP_GPU_MEMORY_GB"])
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=20)
+        return float(out.stdout.strip().splitlines()[0]) / 1024 if out.returncode == 0 and out.stdout.strip() else 0.0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return 0.0
+
+
+def detect_gpu_ids() -> list[int]:
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=20)
+        return [int(x) for x in out.stdout.split()] if out.returncode == 0 else []
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return []
+
+
+class RuntimeRunner:
+    def __init__(self, runtime_spec: Any, log_dir: Path) -> None:
+        self.spec = runtime_spec
+        self.root = Path(runtime_spec.root)
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self._gpu_gb: float | None = None
+
+    @property
+    def gpu_memory_gb(self) -> float:
+        if self._gpu_gb is None:
+            self._gpu_gb = detect_gpu_memory_gb()
+        return self._gpu_gb
+
+    @property
+    def gpu_ids(self) -> list[int]:
+        if not hasattr(self, "_gpu_ids"):
+            self._gpu_ids = detect_gpu_ids()
+        return self._gpu_ids
+
+    @property
+    def cpu_count(self) -> int:
+        return os.cpu_count() or 4
+
+    # ---- paths ------------------------------------------------------------------
+
+    def python(self, runtime: str) -> str:
+        if runtime in self.spec.venvs:
+            return self.spec.venvs[runtime]
+        if runtime not in RUNTIME_VENVS:
+            raise ConfigError(f"unknown runtime '{runtime}'")
+        venv = RUNTIME_VENVS[runtime]
+        if venv is None:
+            return sys.executable
+        path = self.root / "venvs" / venv / "bin" / "python"
+        if not path.exists():
+            raise ConfigError(f"runtime '{runtime}' is not installed ({path}). Run: bash scripts/setup_vast.sh")
+        return str(path)
+
+    def repo(self, name: str) -> Path:
+        rel = self.spec.repos.get(name)
+        if not rel:
+            raise ConfigError(f"no repository configured for '{name}'")
+        path = Path(rel) if Path(rel).is_absolute() else self.root / rel
+        if not path.exists():
+            raise ConfigError(f"repository '{name}' not found at {path}. Run: bash scripts/setup_vast.sh")
+        return path
+
+    @property
+    def weights_dir(self) -> Path:
+        path = Path(self.spec.weights_dir)
+        return path if path.is_absolute() else self.root / path
+
+    def env(self, runtime: str) -> dict[str, str]:
+        env = dict(os.environ)
+        env.setdefault("HF_HOME", str(self.root / "hf"))
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(SRC_DIR), env.get("PYTHONPATH", "")]))
+        env["PYTHONUNBUFFERED"] = "1"
+        env["VP_DEVICE"] = self.spec.device
+        # CUDA libraries shipped as pip wheels (nvidia-*-cu12) are not on the loader path by default.
+        python = Path(self.python(runtime))
+        site = glob.glob(str(python.parent.parent / "lib" / "python3*" / "site-packages" / "nvidia" / "*" / "lib"))
+        if site:
+            env["LD_LIBRARY_PATH"] = os.pathsep.join([*site, env.get("LD_LIBRARY_PATH", "")])
+        return env
+
+    # ---- execution -------------------------------------------------------------------
+
+    def run_command(
+        self, runtime: str, argv: list[str], *, cwd: Path | None = None, log_name: str, timeout_minutes: float | None = None,
+        env_extra: dict[str, str] | None = None,
+    ) -> None:
+        log_path = self.log_dir / f"{log_name}.log"
+        timeout = (timeout_minutes or self.spec.worker_timeout_minutes) * 60
+        start = time.time()
+        log.info("run [%s] %s (log: %s)", runtime, " ".join(argv[:4]) + (" …" if len(argv) > 4 else ""), log_path)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"\n$ (cwd={cwd}) {' '.join(argv)}\n")
+            handle.flush()
+            try:
+                result = subprocess.run(
+                    argv, cwd=cwd, env={**self.env(runtime), **(env_extra or {})}, stdout=handle,
+                    stderr=subprocess.STDOUT, timeout=timeout,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise StageFailure(f"{log_name}: timed out after {timeout / 60:.0f} min (see {log_path})") from exc
+        if result.returncode != 0:
+            tail = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]
+            raise StageFailure(f"{log_name}: exit code {result.returncode} (see {log_path})\n  " + "\n  ".join(tail))
+        log.info("done [%s] %s in %.1fs", runtime, log_name, time.time() - start)
+
+    def call_worker(
+        self, runtime: str, worker: str, request: dict[str, Any], *, workdir: Path, timeout_minutes: float | None = None,
+        tag: str | None = None, env_extra: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        workdir.mkdir(parents=True, exist_ok=True)
+        suffix = f".{tag}" if tag else ""
+        req = workdir / f"{worker}{suffix}.request.json"
+        resp = workdir / f"{worker}{suffix}.response.json"
+        req.write_text(json.dumps(request, ensure_ascii=False, indent=1), encoding="utf-8")
+        if resp.exists():
+            resp.unlink()
+        self.run_command(
+            runtime,
+            [self.python(runtime), "-m", "video_platform.workers", worker, str(req), str(resp)],
+            log_name=f"worker_{worker}_{tag or workdir.name}",
+            timeout_minutes=timeout_minutes,
+            env_extra=env_extra,
+        )
+        if not resp.exists():
+            raise StageFailure(f"worker {worker} produced no response file")
+        return json.loads(resp.read_text(encoding="utf-8"))
+
+
+def fill_template(template: list[str], values: dict[str, Any]) -> list[str]:
+    """Substitute {placeholders} in a command template."""
+    try:
+        return [part.format(**values) for part in template]
+    except KeyError as exc:
+        raise ConfigError(f"command template uses unknown placeholder {exc}; available: {sorted(values)}") from exc

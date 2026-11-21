@@ -1,0 +1,19 @@
+model_id: mlx-whisper-large-v3-turbo
+name: Whisper large-v3-turbo (MLX conversion)
+tasks: [asr]
+status: legacy
+repository: https://github.com/ml-explore/mlx-examples
+weights: {hf_repo: mlx-community/whisper-large-v3-turbo, pinned_revision: legacy-unpinned}
+licence:
+  code: MIT
+  weights: MIT
+  personal_use: "yes"
+  commercial_use: "yes"
+  notes: OpenAI Whisper weights are MIT. This is a community MLX conversion, so confirm the repo's licence tag.
+  sources: [https://huggingface.co/mlx-community/whisper-large-v3-turbo, https://github.com/openai/whisper]
+supported_languages: multilingual
+hardware: {runtimes: [mlx], notes: Apple Silicon only. Used for the legacy project_001 transcript.}
+input_format: 16 kHz mono wav
+output_format: Whisper JSON (segments)
+inference_parameters: {condition_on_previous_text: false}
+known_limitations: [Apple Silicon only, cannot run on Vast.ai CUDA hosts, occasional zero or negative-length segments (3 in project_001)]

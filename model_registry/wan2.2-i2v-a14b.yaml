@@ -1,0 +1,7 @@
+model_id: wan2.2-i2v-a14b
+name: Wan2.2-I2V-A14B
+tasks: [image_to_video]
+repository: https://github.com/Wan-Video/Wan2.2
+weights: {hf_repo: Wan-AI/Wan2.2-I2V-A14B}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B]}
+hardware: {runtimes: [cuda], min_vram_gb: 24, recommended_vram_gb: 80}

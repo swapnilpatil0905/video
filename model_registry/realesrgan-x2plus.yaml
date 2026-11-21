@@ -1,0 +1,11 @@
+model_id: realesrgan-x2plus
+name: Real-ESRGAN x2plus (video upscaling, loaded with spandrel)
+tasks: [upscaling]
+status: candidate
+repository: https://github.com/xinntao/Real-ESRGAN
+weights:
+  url: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth
+  files: [RealESRGAN_x2plus.pth]
+licence: {code: BSD-3-Clause, weights: BSD-3-Clause, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/xinntao/Real-ESRGAN]}
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 2}
+known_limitations: ["Frame-by-frame upscaler: can sharpen noise; falls back to Lanczos on failure"]

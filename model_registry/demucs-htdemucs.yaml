@@ -1,0 +1,7 @@
+model_id: demucs-htdemucs
+name: Demucs v4 (htdemucs / htdemucs_ft)
+tasks: [source_separation]
+repository: https://github.com/adefossez/demucs
+licence: {code: MIT, weights: MIT, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/adefossez/demucs]}
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 4, recommended_vram_gb: 8}
+known_limitations: [Repository maintenance is low]

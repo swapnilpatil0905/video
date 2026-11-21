@@ -1,0 +1,10 @@
+model_id: qwen3-14b
+name: Qwen3-14B (default story / localization LLM)
+tasks: [story_understanding, localization, character_design]
+status: selected
+repository: https://github.com/QwenLM/Qwen3
+weights: {hf_repo: Qwen/Qwen3-14B}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/Qwen/Qwen3-14B]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda], min_vram_gb: 32, recommended_vram_gb: 48, notes: "bf16 via vLLM. Switch production.llm.model to qwen3-32b on 80 GB+."}
+known_limitations: [Hindi naturalness must be judged by a native reviewer]

@@ -1,0 +1,8 @@
+model_id: indicf5
+name: IndicF5 (AI4Bharat)
+tasks: [tts]
+repository: https://github.com/AI4Bharat/IndicF5
+weights: {hf_repo: ai4bharat/IndicF5}
+licence: {code: unknown, weights: unknown, personal_use: unknown, commercial_use: unknown, notes: Read the model card. Licence not known from documentation., sources: [https://huggingface.co/ai4bharat/IndicF5]}
+supported_languages: [hi, bn, ta, te, mr, gu, kn, ml, pa, or, as]
+hardware: {runtimes: [cuda], min_vram_gb: 6}

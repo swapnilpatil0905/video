@@ -1,0 +1,6 @@
+model_id: talknet-asd
+name: TalkNet-ASD
+tasks: [active_speaker_detection]
+repository: https://github.com/TaoRuijie/TalkNet-ASD
+licence: {code: MIT, weights: trained on AVA-ActiveSpeaker, personal_use: "yes", commercial_use: unknown, sources: [https://github.com/TaoRuijie/TalkNet-ASD]}
+hardware: {runtimes: [cuda], min_vram_gb: 4}

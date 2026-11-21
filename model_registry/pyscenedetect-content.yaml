@@ -1,0 +1,8 @@
+model_id: pyscenedetect-content
+name: PySceneDetect ContentDetector (algorithmic)
+tasks: [shot_detection]
+status: legacy
+repository: https://github.com/Breakthrough/PySceneDetect
+licence: {code: BSD-3-Clause, weights: n/a, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/Breakthrough/PySceneDetect]}
+hardware: {runtimes: [cpu]}
+known_limitations: [Misses gradual transitions; benchmark against TransNetV2]

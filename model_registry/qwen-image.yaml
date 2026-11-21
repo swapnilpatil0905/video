@@ -1,0 +1,8 @@
+model_id: qwen-image
+name: Qwen-Image (text-to-image)
+tasks: [character_image_generation]
+status: selected
+repository: https://github.com/QwenLM/Qwen-Image
+weights: {hf_repo: Qwen/Qwen-Image}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/Qwen/Qwen-Image]}
+hardware: {runtimes: [cuda], min_vram_gb: 48, recommended_vram_gb: 80, notes: "About 57 GB of weights in bf16. Uses CPU offload under 80 GB."}

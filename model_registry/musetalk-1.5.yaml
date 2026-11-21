@@ -1,0 +1,8 @@
+model_id: musetalk-1.5
+name: MuseTalk 1.5
+tasks: [lip_sync]
+repository: https://github.com/TMElyralab/MuseTalk
+weights: {hf_repo: TMElyralab/MuseTalk}
+licence: {code: MIT, weights: unknown, personal_use: "yes", commercial_use: unknown, notes: "Bundles components (sd-vae, whisper, dwpose, face-parsing) with their own licences", sources: [https://github.com/TMElyralab/MuseTalk]}
+hardware: {runtimes: [cuda], min_vram_gb: 6, recommended_vram_gb: 12}
+known_limitations: [256 px face region]

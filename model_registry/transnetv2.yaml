@@ -1,0 +1,6 @@
+model_id: transnetv2
+name: TransNetV2
+tasks: [shot_detection]
+repository: https://github.com/soCzech/TransNetV2
+licence: {code: MIT, weights: MIT, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/soCzech/TransNetV2]}
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 2}

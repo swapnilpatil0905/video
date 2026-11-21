@@ -1,0 +1,9 @@
+model_id: qwen3-32b
+name: Qwen3-32B
+tasks: [story_understanding, localization, dialogue_adaptation]
+repository: https://github.com/QwenLM/Qwen3
+weights: {hf_repo: Qwen/Qwen3-32B}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/Qwen/Qwen3-32B]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda], min_vram_gb: 80, recommended_vram_gb: 96, notes: "bf16 (~64 GB weights) via vLLM; AWQ variant ~24 GB"}
+known_limitations: [Hindi naturalness must be judged by a native reviewer]

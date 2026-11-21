@@ -1,0 +1,6 @@
+model_id: mediapipe-face-landmarker
+name: MediaPipe Face Landmarker
+tasks: [face_landmarks, mouth_motion]
+repository: https://github.com/google-ai-edge/mediapipe
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/google-ai-edge/mediapipe]}
+hardware: {runtimes: [cpu, cuda]}

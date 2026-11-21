@@ -1,0 +1,7 @@
+model_id: infinitetalk
+name: InfiniteTalk (audio-driven video dubbing, Wan-based)
+tasks: [lip_sync, dubbing]
+repository: https://github.com/MeiGen-AI/InfiniteTalk
+weights: {hf_repo: MeiGen-AI/InfiniteTalk}
+licence: {code: Apache-2.0, weights: unknown, personal_use: "yes", commercial_use: unknown, sources: [https://github.com/MeiGen-AI/InfiniteTalk]}
+hardware: {runtimes: [cuda], min_vram_gb: 24, recommended_vram_gb: 80}

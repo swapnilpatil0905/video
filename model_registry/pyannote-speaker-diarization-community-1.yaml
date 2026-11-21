@@ -1,0 +1,18 @@
+model_id: pyannote-speaker-diarization-community-1
+name: pyannote speaker-diarization-community-1
+tasks: [diarization, overlap_detection]
+status: legacy
+repository: https://github.com/pyannote/pyannote-audio
+weights: {hf_repo: pyannote/speaker-diarization-community-1, pinned_revision: legacy-unpinned, gated: true}
+licence:
+  code: MIT
+  weights: CC-BY-4.0
+  personal_use: "yes"
+  commercial_use: "yes"
+  attribution_required: true
+  notes: Gated. Accept the terms on Hugging Face with your personal account and set HF_TOKEN.
+  sources: [https://huggingface.co/pyannote/speaker-diarization-community-1]
+supported_languages: multilingual
+hardware: {runtimes: [cuda, cpu, mps], min_vram_gb: 4, recommended_vram_gb: 8, notes: "project_001 legacy run: 79.4 min on M3 Max"}
+input_format: 16 kHz mono wav
+output_format: speaker turns

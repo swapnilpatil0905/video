@@ -1,0 +1,12 @@
+model_id: faster-whisper-large-v3
+name: Whisper large-v3 (CTranslate2 / faster-whisper)
+tasks: [asr]
+status: selected
+repository: https://github.com/SYSTRAN/faster-whisper
+weights: {hf_repo: Systran/faster-whisper-large-v3}
+licence: {code: MIT, weights: MIT, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/Systran/faster-whisper-large-v3]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 6, recommended_vram_gb: 10}
+input_format: audio file
+output_format: segments with word timestamps
+known_limitations: [Hallucination on long silences; use VAD filtering]

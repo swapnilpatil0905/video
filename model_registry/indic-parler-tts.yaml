@@ -1,0 +1,8 @@
+model_id: indic-parler-tts
+name: Indic Parler-TTS (description-controlled voice design)
+tasks: [tts, voice_design]
+repository: https://github.com/huggingface/parler-tts
+weights: {hf_repo: ai4bharat/indic-parler-tts}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/ai4bharat/indic-parler-tts]}
+supported_languages: [hi, bn, ta, te, mr, gu, kn, ml, pa, or, as, en]
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 4, recommended_vram_gb: 8}

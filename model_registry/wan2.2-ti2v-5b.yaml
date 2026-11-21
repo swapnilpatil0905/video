@@ -1,0 +1,7 @@
+model_id: wan2.2-ti2v-5b
+name: Wan2.2-TI2V-5B (preview tier)
+tasks: [text_to_video, image_to_video]
+repository: https://github.com/Wan-Video/Wan2.2
+weights: {hf_repo: Wan-AI/Wan2.2-TI2V-5B}
+licence: {code: Apache-2.0, weights: Apache-2.0, personal_use: "yes", commercial_use: "yes", sources: [https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B]}
+hardware: {runtimes: [cuda], min_vram_gb: 24, recommended_vram_gb: 32}

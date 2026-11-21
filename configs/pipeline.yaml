@@ -1,0 +1,266 @@
+# Pipeline stage graph (schema_version 1).
+#
+# Each stage's artifact id = hash(stage, version, upstream ids, params_from slice, model fingerprint).
+# Bump `version` when a stage's logic changes. `milestone` = when its executor is implemented.
+# Later milestones append stages (narrative, localization, generation, ...).
+schema_version: 1
+
+stages:
+  - name: ingest
+    version: "1"
+    description: Validate the source, probe metadata (ffprobe), checksum. Never modifies the source.
+    runtime: cpu
+    outputs: [video_metadata.json]
+    milestone: M2
+
+  - name: extract_audio
+    version: "1"
+    description: Extract the speech-analysis audio track.
+    depends_on: [ingest]
+    runtime: cpu
+    params_from: analysis.audio
+    outputs: [speech audio (wav)]
+    milestone: M2
+
+  - name: asr
+    version: "1"
+    description: Automatic speech recognition (source language).
+    depends_on: [extract_audio]
+    runtime: analysis-gpu
+    params_from: analysis.asr
+    model_from: analysis.asr.model
+    outputs: [transcript.json]
+    milestone: M2
+
+  - name: transcript_filter
+    version: "1"
+    description: Drop configured non-dialogue segments (e.g. broadcaster watermarks); flag invalid timestamps.
+    depends_on: [asr]
+    runtime: cpu
+    params_from: analysis.transcript_filters
+    outputs: [transcript_clean.json]
+    milestone: M2
+
+  - name: diarization
+    version: "1"
+    description: Speaker diarization.
+    depends_on: [extract_audio]
+    runtime: analysis-gpu
+    params_from: analysis.diarization
+    model_from: analysis.diarization.model
+    outputs: [speaker_turns.json]
+    milestone: M2
+
+  - name: shot_detection
+    version: "1"
+    description: Shot boundary detection.
+    depends_on: [ingest]
+    runtime: cpu
+    params_from: analysis.shots
+    outputs: [shots.json]
+    milestone: M2
+
+  - name: frame_sampling
+    version: "1"
+    description: Keyframe / temporal frame sampling per shot.
+    depends_on: [shot_detection]
+    runtime: cpu
+    params_from: analysis.frames
+    outputs: [keyframes.json, frames]
+    milestone: M2
+
+  - name: face_detection
+    version: "1"
+    depends_on: [frame_sampling]
+    runtime: analysis-gpu
+    params_from: analysis.face_detection
+    model_from: analysis.face_detection.model
+    outputs: [face_detections.json, crops]
+    milestone: M2
+
+  - name: face_embedding
+    version: "1"
+    depends_on: [face_detection]
+    runtime: analysis-gpu
+    params_from: analysis.face_embedding
+    model_from: analysis.face_embedding.model
+    outputs: [face_embeddings.npz]
+    milestone: M2
+
+  - name: face_clustering
+    version: "1"
+    depends_on: [face_embedding]
+    runtime: cpu
+    params_from: analysis.clustering
+    outputs: [clusters]
+    milestone: M2
+
+  - name: character_database
+    version: "1"
+    depends_on: [face_clustering]
+    runtime: cpu
+    params_from: analysis.character_database
+    outputs: [source_characters.json]
+    milestone: M2
+
+  - name: alignment
+    version: "1"
+    description: Master timeline — transcript × diarization × shots.
+    depends_on: [transcript_filter, diarization, shot_detection]
+    runtime: cpu
+    params_from: analysis.alignment
+    outputs: [audio_segments.json]
+    milestone: M2
+
+  - name: speaker_mapping_prior
+    version: "1"
+    description: Co-occurrence speaker↔character candidates (weak prior only; never 'accepted').
+    depends_on: [alignment, character_database]
+    runtime: cpu
+    params_from: analysis.speaker_mapping_prior
+    outputs: [speaker_character_prior.json]
+    milestone: M2
+
+  # ---- additional analysis ------------------------------------------------
+  - name: extract_audio_full
+    version: "1"
+    description: Full-quality stereo audio (48 kHz) for separation and mixing.
+    depends_on: [ingest]
+    runtime: cpu
+    outputs: [full_48k.wav]
+    milestone: M2
+
+  - name: source_separation
+    version: "1"
+    description: Demucs vocals / music+effects (M&E) separation.
+    depends_on: [extract_audio_full]
+    runtime: audio-gpu
+    params_from: analysis.separation
+    model_from: analysis.separation.model
+    outputs: [vocals.wav, music_effects.wav]
+    milestone: M2
+
+  - name: emotion
+    version: "1"
+    description: Per-segment speech emotion and audio events (SenseVoice).
+    depends_on: [alignment, extract_audio]
+    runtime: audio-gpu
+    params_from: analysis.emotion
+    model_from: analysis.emotion.model
+    outputs: [emotions.json]
+    milestone: M2
+
+  - name: active_speaker
+    version: "1"
+    description: Which visible character is actually speaking (lower-face motion + identity), per segment.
+    depends_on: [alignment, character_database, face_embedding, face_clustering, shot_detection, ingest]
+    runtime: analysis-gpu
+    params_from: analysis.active_speaker
+    outputs: [active_speaker.json]
+    milestone: M2
+
+  - name: speaker_mapping
+    version: "1"
+    description: speaker_id → character_id with confidence and evidence; never forced.
+    depends_on: [active_speaker, speaker_mapping_prior, alignment]
+    runtime: cpu
+    params_from: analysis.speaker_mapping
+    outputs: [speaker_mapping.json]
+    milestone: M2
+
+  - name: character_profile
+    version: "1"
+    description: Gender/age estimate, screen time, speaking time, importance tier per source character.
+    depends_on: [character_database, speaker_mapping, alignment, face_detection]
+    runtime: analysis-gpu
+    params_from: analysis.importance
+    outputs: [character_profiles.json]
+    milestone: M2
+
+  # ---- story and localization -----------------------------------------------
+  - name: narrative
+    version: "1"
+    description: Chunk summaries, synopsis, roles, relationships, turning points, spoiler levels.
+    depends_on: [alignment, speaker_mapping, character_profile]
+    runtime: llm-gpu
+    params_from: production.llm
+    model_from: production.llm.model
+    outputs: [narrative.json]
+    milestone: M3
+
+  - name: character_design
+    version: "1"
+    description: Fictional replacement characters (names, appearance, wardrobe, voice description).
+    depends_on: [narrative, character_profile]
+    runtime: llm-gpu
+    params_from: production.llm
+    model_from: production.llm.model
+    outputs: [character_designs.json]
+    milestone: M4
+
+  - name: localization
+    version: "1"
+    description: Context-aware Hindi dialogue with shorter variants, emotion and delivery notes.
+    depends_on: [narrative, character_design, alignment, emotion, speaker_mapping]
+    runtime: llm-gpu
+    params_from: production.llm
+    model_from: production.llm.model
+    outputs: [localized_lines.json]
+    milestone: M3
+
+  # ---- assets -------------------------------------------------------------------
+  - name: character_references
+    version: "1"
+    description: Master identity image plus pose/expression sheet per replacement character (identity-checked).
+    depends_on: [character_design, face_embedding, face_clustering]
+    runtime: generation-gpu
+    params_from: production.character_images
+    model_from: [production.character_images.model, production.character_images.edit_model]
+    outputs: [character_references.json]
+    milestone: M4
+
+  - name: voice_design
+    version: "1"
+    description: One original (non-cloned) designed voice per diarized speaker.
+    depends_on: [character_design, speaker_mapping, character_profile]
+    runtime: audio-gpu
+    params_from: [production.voice_design, languages.target]
+    model_from: production.voice_design.model
+    outputs: [voices.json]
+    milestone: M4
+
+  # ---- sample trailer (quality gate) and full production -------------------------
+  - name: sample_selection
+    version: "1"
+    description: Characters, scenes and dialogue for the representative trailer.
+    depends_on: [character_profile, narrative, localization, speaker_mapping, active_speaker, shot_detection]
+    runtime: cpu
+    params_from: [sample, production.selection]
+    outputs: [character_selection.json, dialogue_selection.json]
+    milestone: M5
+
+  - name: sample_production
+    version: "1"
+    description: TTS, shot generation, lip-sync, mix, assembly and QA for the trailer.
+    depends_on: [sample_selection, character_references, voice_design, source_separation, localization, character_database, shot_detection, ingest]
+    runtime: generation-gpu
+    params_from: [production, sample, rights, video, audio]
+    model_from: [production.tts.model, production.video.model, production.lipsync.model]
+    outputs: [trailer.mp4, quality_report.json]
+    milestone: M5
+
+  - name: full_production
+    version: "1"
+    description: Full-length production. Requires an approved sample; reuses all sample items.
+    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, localization, character_database, ingest]
+    runtime: generation-gpu
+    params_from: [production, rights, video, audio]
+    model_from: [production.tts.model, production.video.model, production.lipsync.model]
+    outputs: [final.mp4, quality_report.json]
+    milestone: M6
+
+modes:
+  analyze: [speaker_mapping, character_profile, emotion, source_separation]
+  sample: [sample_production]
+  analyze-and-sample: [sample_production]
+  full: [full_production]

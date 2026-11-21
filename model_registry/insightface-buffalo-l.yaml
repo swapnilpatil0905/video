@@ -1,0 +1,16 @@
+model_id: insightface-buffalo-l
+name: InsightFace buffalo_l (SCRFD-10G + ArcFace R50, WebFace600K)
+tasks: [face_detection, face_embedding]
+status: legacy
+repository: https://github.com/deepinsight/insightface
+weights: {url: https://github.com/deepinsight/insightface/tree/master/python-package, files: [buffalo_l.zip], pinned_revision: legacy-unpinned}
+licence:
+  code: MIT
+  weights: non-commercial research only
+  personal_use: "yes"
+  commercial_use: "no"
+  notes: Fine for personal learning. A commercial licence is sold separately by InsightFace.
+  sources: [https://github.com/deepinsight/insightface/tree/master/python-package]
+hardware: {runtimes: [cpu, cuda], min_vram_gb: 2}
+input_format: BGR image
+output_format: 512-d normalised embedding

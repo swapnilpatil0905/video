@@ -1,0 +1,132 @@
+# project_001 — Chinese short drama → Hindi remake (personal self-improvement learning project).
+# Validate:  ./run.sh --project projects/project_001/config.yaml --validate-only
+schema_version: 1
+
+project:
+  id: project_001
+  name: chinese_drama_hindi_remake
+  project_type: full_remake
+  source_video: input/source.mp4          # relative to this directory (hardlinked from the legacy workspace)
+  description: Midsummer short drama (zh) remade in Hindi with fictional characters and original voices.
+
+languages:
+  source: zh
+  target: hi
+  target_region: IN
+
+localization:
+  preserve_story: true
+  cultural_adaptation: true
+  natural_dialogue: true
+  generate_subtitles: true
+  register: colloquial                    # avoid textbook Hindi
+
+creative:
+  visual_style: photorealistic_cinematic
+  character_style: realistic_fictional
+  environment_style: cinematic
+  preserve_scene_order: true
+  preserve_camera_intent: true
+  character_consistency: high
+
+video:
+  target_resolution: 1080x1920
+  target_fps: 30
+  target_aspect_ratio: "9:16"
+  codec: h264
+
+audio:
+  target_language: hi
+  voice_generation: true
+  preserve_emotion: true
+  speaker_voice_consistency: true
+
+generation:
+  replace_characters: true
+  regenerate_backgrounds: true
+  generate_new_shots: true
+  lip_sync: true
+
+quality:
+  automatic_quality_checks: true
+  review_low_confidence: true
+  human_approval_required: true
+
+sample:
+  enabled: true
+  duration_seconds: 90
+  include_all_important_characters: true
+  include_all_speaking_characters: true
+  character_coverage: high
+  narrative_coverage: full
+  emotional_diversity: true
+  generate_voice_previews: true
+  generate_subtitles: true
+  generate_quality_report: true
+  resolution: 720x1280
+  fps: 24
+  visual_quality: balanced
+  human_approval_required: true
+  compare_profiles: [high]                # trailer only, best quality (add "balanced" to compare costs)
+
+rights:
+  purpose: self_improvement_learning
+  distribution: private
+  reuse_source_footage: true              # only for shots with no replacement character (private learning use)
+  reuse_source_music_and_effects: true    # Demucs M&E stem, private use only
+
+# Analysis parameters below equal those used by the legacy scripts in pipeline/, so the
+# imported legacy results are cache hits. Changing any value re-runs that stage (and
+# everything downstream) instead of reusing the legacy output.
+analysis:
+  audio: {stream_index: 0, sample_rate: 16000, channels: 1, codec: pcm_s16le}
+  asr:
+    model: mlx-whisper-large-v3-turbo     # legacy run on the Mac; Vast.ai runs use faster-whisper
+    backend: mlx_whisper
+    language: zh
+    condition_on_previous_text: false
+  transcript_filters:
+    drop_patterns: ["优优独播剧场", "YoYo Television Series Exclusive"]
+  diarization:
+    model: pyannote-speaker-diarization-community-1
+    min_speakers: null
+    max_speakers: null
+  shots: {detector: pyscenedetect_content, threshold: 27.0, min_scene_len_frames: 15}
+  frames: {strategy: midpoint, fps: null, width: 480, jpeg_quality: 80}
+  face_detection:
+    model: opencv-yunet-2023mar
+    confidence_threshold: 0.75
+    nms_threshold: 0.3
+    top_k: 5000
+    padding: 0.35
+    crop_size: 256
+    jpeg_quality: 90
+  face_embedding:
+    model: insightface-buffalo-l
+    det_size: 320
+    execution_provider: CPUExecutionProvider
+    face_selection: largest
+  clustering: {algorithm: dbscan, eps: 0.35, min_samples: 2, metric: cosine}
+  character_database: {representatives_per_cluster: 5}
+  alignment: {strong_ratio: 0.7, moderate_ratio: 0.3}
+
+notifications:
+  enabled: false                          # enabled in M5 (approval service + VPS)
+  approval:
+    allow_cli_override: true              # `--approve-sample` stays as an audited admin override
+
+production:
+  llm:
+    model: qwen3-32b                      # fits the 96 GB RTX PRO 6000; use qwen3-14b on GPUs < 80 GB
+
+storage:
+  provider: local
+  root: artifacts
+
+compute:
+  provider: local
+  launcher: manual
+
+budget:
+  max_total_spend_usd: null               # open
+  max_sample_spend_usd: null              # open

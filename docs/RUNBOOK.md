@@ -1,0 +1,233 @@
+# Runbook: run the whole pipeline on Vast.ai
+
+## Installation (trailer only, ~7–14 h, ~$8–16)
+
+### 1. Rent the machine on Vast.ai
+
+| Setting | Value |
+|---|---|
+| **GPU** | 1× **RTX PRO 6000 (96 GB)**. Alternatives: H100 SXM, A100 80 GB. Must have ≥ 80 GB VRAM. |
+| **Filter** | Reliability ≥ 98%, verified host, RAM ≥ 64 GB, max CUDA ≥ 12.8 (Blackwell) or ≥ 12.4 (H100/A100), download ≥ 500 Mbps |
+| **Template** | **NVIDIA CUDA** (12.4 / 12.6 / 12.8, any plain CUDA template the machine accepts). Avoid app templates (ComfyUI, Hashcat, …). |
+| **Launch mode** | **Jupyter + SSH** (Jupyter is the easiest way to upload the zip) |
+| **Container / disk size** | **400 GB** (at least 300 GB for the trailer) |
+| **On-start script** | `bash /workspace/video/scripts/onstart.sh` (optional; auto-resumes after a restart) |
+
+The image's CUDA version doesn't matter much. The pipeline installs its own CUDA libraries, and what counts is the **host driver**: `nvidia-smi` must show `CUDA Version: 12.8` or higher on RTX PRO / Blackwell.
+
+### 2. Upload and unzip
+
+Upload `video-platform-0.4.0.zip` to `/workspace` (Jupyter → Upload), then open a Jupyter **Terminal**:
+
+```bash
+nvidia-smi                                   # check GPU + "CUDA Version"
+cd /workspace && python3 -m zipfile -e video-platform-0.4.0.zip video && cd video
+```
+
+### 3. `.env` is already included
+
+The zip contains a `.env` with your Hugging Face token, your `NOTIFY_EMAIL`, a random ntfy topic and the GPU price.
+
+- **Email without any password:** notifications are forwarded to your inbox by **ntfy.sh**. They are text only, the sender is ntfy.sh, and they may land in spam the first time.
+- **Optional, for emails with the trailer preview attached:** add a Gmail app password (created at https://myaccount.google.com/apppasswords):
+  ```bash
+  cat >> .env <<'ENV'
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_USERNAME=you@gmail.com
+  SMTP_PASSWORD=your16charapppassword
+  ENV
+  ```
+- If you rented at a different price, edit `VP_GPU_PRICE_PER_HOUR` in `.env`.
+
+### 4. Test email (seconds, no setup needed)
+
+```bash
+bash start.sh notify-test       # "[mail] sent" → check your inbox (and spam)
+```
+
+### 5. Start the trailer (runs in the background)
+
+```bash
+nohup bash start.sh > /workspace/run.log 2>&1 &
+tail -f /workspace/run.log      # Ctrl+C stops watching; the run continues
+```
+
+You get an **email when the trailer is ready**, with a summary, a compressed preview and the thumbnail. If anything fails, the email contains the error.
+
+### 6. Download and shut down
+
+All results are in `/workspace/video/projects/project_001/sample/`:
+
+| File | What it is |
+|---|---|
+| `trailer_high.mp4` | The trailer (full quality) |
+| `high/trailer_with_subtitles.mp4`, `high/trailer.srt` | Hindi subtitles |
+| `character_references/` | The new characters' identity photos |
+| `voice_preview/` | Their voices |
+| `high/quality_report.json`, `high/trailer_timeline.json`, `high/cost_report.json` | Reports |
+
+Download the `sample/` folder (Jupyter → right-click → Download, or zip it first: `cd projects/project_001 && python3 -m zipfile -c /workspace/sample.zip sample`), then **destroy the instance**.
+
+### Useful commands
+
+| Command | Purpose |
+|---|---|
+| `bash start.sh status` | Progress and cache status |
+| `tail -f /workspace/run.log` | Live log |
+| `nohup bash start.sh > /workspace/run.log 2>&1 &` | Resume after an error or restart (finished work is reused) |
+| `bash start.sh regen-shot SH_00042`, then `bash start.sh` | Redo one shot |
+| `bash start.sh regen-line SEG_000123`, then `bash start.sh` | Redo one dialogue line |
+| `bash start.sh smoke` | Optional quick test on the first 3 minutes (needs `HF_TOKEN`) |
+
+To also compare a cheaper `balanced` trailer, set `compare_profiles: [high, balanced]` under `sample:` in `projects/project_001/config.yaml`.
+
+## What the run does
+
+The first run goes through these steps:
+
+1. **Setup** (once, idempotent): system packages and 9 isolated model environments, all from public sources. It downloads Wan2.2-Animate-14B and LatentSync. Other weights download on first use into `/workspace/vp/hf`.
+2. **Imports your existing analysis** (transcript, diarization, shots, faces, characters, timeline) as cache hits, so none of it re-runs.
+3. **New analysis:**
+   - Source separation (music and effects kept, voices removed)
+   - Speech emotion
+   - Active-speaker detection
+   - Speaker → character mapping
+   - Character importance
+4. **Story:** synopsis, roles, turning points and spoiler levels (Qwen3, self-hosted).
+5. **Character design:** new fictional, photorealistic replacement characters (names, looks, wardrobe, voice description).
+6. **Localization:** context-aware, colloquial Hindi for every line, including a shorter variant per line.
+7. **Character references:** one master identity image per character, plus expression and pose variants edited from that master.
+   - Every face is identity-checked.
+   - Anything that looks too much like the original actor is regenerated.
+8. **Voices:** one original designed voice per speaker. These are never clones of the source actors.
+9. **Trailer selection:** about 90 s, covering every important speaking character, spread across the story, avoiding major spoilers, in chronological order.
+10. **Trailer production:**
+    - Hindi TTS
+    - Wan2.2-Animate character replacement, using the same master reference in every shot
+    - An identity check per shot (retried with a new seed if the face drifts)
+    - LatentSync lip-sync
+    - Music and effects bed
+    - Loudness normalization
+    - Subtitles
+    - QA reports
+11. **Emails you and stops.** No GPU work runs afterwards; download the results and destroy the instance.
+
+## Optional: compare profiles and produce the full film
+
+`bash start.sh` makes **two trailers from the same selection, characters, voices and Hindi lines**:
+
+| Profile | Settings | Expected cost |
+|---|---|---|
+| `high` | 720p-area generation, 20 Wan steps, lip-sync on every speaking shot | baseline |
+| `balanced` | 480p-area generation + Real-ESRGAN upscaling, **4-step distilled Wan** (LightX2V LoRA), SageAttention, 12 lip-sync steps, lip-sync only where faces are visible | roughly 5–10× cheaper (measured in `comparison.json`) |
+
+Everything is in `projects/project_001/sample/`:
+
+- `trailer_high.mp4` and `trailer_balanced.mp4`: watch them side by side.
+- `comparison.json`: *measured* GPU-seconds per output second, the estimated full-film GPU-hours and cost per profile, identity scores, lip-sync coverage, TTS accuracy, and notes on any fallbacks.
+- `high/` and `balanced/`: the full reports per profile (quality, coverage, timeline, cost, summary, subtitles, thumbnail).
+- `voice_preview/`, `character_references/`, `character_selection.json`, `dialogue_selection.json`: shared by both profiles.
+
+Approve the one you prefer:
+
+```bash
+bash start.sh approve balanced    # or: bash start.sh approve high
+bash start.sh reject              # stop; nothing is deleted
+```
+
+- Full production uses the approved profile. Approval is bound to that exact trailer file.
+- The output goes to `projects/project_001/output/`.
+- **Speed-up fallbacks:** if a speed-up can't be used on your machine (for example the LoRA doesn't load, or SageAttention or Real-ESRGAN fail), the profile continues with the standard method, and `comparison.json` → `notes` says so.
+
+## Interruptible (spot) instances: 30–60% cheaper
+
+The pipeline caches every finished shot, line and stage, so it can resume after an interruption:
+
+1. Rent an **interruptible** instance.
+2. In the Vast.ai template, set **On-start Script** to: `bash /workspace/video/scripts/onstart.sh`
+3. After any restart it runs `bash start.sh resume` in the background (log: `/workspace/vp/logs/run.log`). It continues the trailer, or the full film if one is approved. Nothing is redone.
+4. To pause auto-resume: `touch /workspace/vp/logs/AUTO_RESUME_DISABLED`
+
+## Choosing a GPU
+
+Relative speed for Wan and LatentSync. These are rough, unmeasured estimates; your `comparison.json` gives real numbers.
+
+| GPU | VRAM | Speed vs RTX PRO 6000 | Notes |
+|---|---|---|---|
+| A100 80 GB | 80 GB | ~0.8–1.0× | Cheap and mature; slower |
+| **RTX PRO 6000 (Blackwell)** | 96 GB | 1× | Good value; newest architecture, so some optional speed-ups may fall back |
+| H100 PCIe | 80 GB | ~1.3–1.5× | |
+| **H100 SXM** | 80 GB | ~1.5–2× | Best-supported for flash-attention, SageAttention and vLLM |
+| H200 | 141 GB | ~1.7–2.3× | Same compute as H100 with faster memory; worth it only near H100 price |
+| **B200** | ~180 GB | ~3–5× | Fastest single GPU if available; needs recent CUDA; some optional speed-ups may fall back |
+| L40S / RTX 6000 Ada | 48 GB | ~0.5–0.7× | Offloads to CPU; not recommended |
+
+**Rule of thumb:** pick the GPU with the lowest **$/hour ÷ relative speed**. Several GPUs of the same kind divide the wait time, not the cost; chunks are split across GPUs automatically.
+
+## GPU utilization and consistency (automatic)
+
+| Phase | How it uses the hardware |
+|---|---|
+| Analysis | Independent stages run at the same time (`runtime.max_parallel_stages`, within a GPU-memory budget). The LLM and generation stages always get the GPU to themselves. |
+| Story / localization | One vLLM process batches every prompt. Qwen3-32B in bf16 on 96 GB. |
+| TTS | 4 parallel Chatterbox workers on ≥ 80 GB GPUs |
+| Clip cutting / encoding | CPU pool, plus NVENC hardware encoding when the container supports it (checked with a real test encode) |
+| Wan preprocessing | 3 parallel processes on ≥ 80 GB GPUs |
+| **Wan generation** | **One persistent process per GPU** loads the 14B model once and renders its whole queue. Offloading is off on ≥ 80 GB. Clips are split across GPUs by duration. If Wan's Python interface doesn't match, it falls back to per-clip runs automatically. |
+| Identity check | One batched pass per round, with a retry round for drifting clips |
+| Lip-sync | 2 parallel LatentSync processes on ≥ 80 GB GPUs (or one per GPU) |
+
+**Chunking without losing consistency:**
+- Video is cut **only at the original shot boundaries**, so joins land on real cuts and are invisible.
+- A shot is split only if it's longer than `production.video.max_clip_seconds` (30 s). Inside a clip, Wan keeps motion and identity continuous on its own.
+- Every chunk of a character uses **the same master reference image, settings and seed**, so the result doesn't depend on which process or GPU rendered it.
+- Each chunk is checked against the master identity, and drifting chunks are regenerated.
+- All chunks are re-encoded once at the end into a single seamless file.
+
+**Tuning:** set the worker counts under `production.parallel.*` (`null` = automatic). `cost_report.json` records the time spent in each phase, so you can compare settings.
+
+## Fix individual items
+
+```bash
+bash start.sh regen-shot SH_00042      # redo one shot (all clips of it)
+bash start.sh regen-line SEG_000123    # redo one dialogue line
+bash start.sh                          # re-produce the trailer: only those items are regenerated
+```
+
+You can change any setting in `projects/project_001/config.yaml`, for example `production.llm.model: qwen3-32b`, `sample.duration_seconds: 60`, voice descriptions, or video and lip-sync command templates. Only the stages affected by the change re-run.
+
+## Other commands
+
+| Command | Purpose |
+|---|---|
+| `bash start.sh status` | Plan, cache status, approval state and history |
+| `bash start.sh smoke` | Quick end-to-end test on the first 3 minutes, as a separate project. Runs *all* analysis and needs `HF_TOKEN`. |
+| `bash start.sh test` | Unit tests |
+| `PROJECT=projects/<id>/config.yaml bash start.sh` | Another project |
+
+`.env`, optional, next to `start.sh`:
+
+```
+HF_TOKEN=hf_xxx              # only for gated models (pyannote for new projects, FLUX if you switch to it)
+VP_GPU_PRICE_PER_HOUR=1.80   # your Vast.ai $/h → fills the cost estimate
+```
+
+## Troubleshooting
+
+| Symptom | Where to look |
+|---|---|
+| Setup failed | `/workspace/vp/logs/setup_<runtime>.log`. Fix the problem, then run `bash start.sh` again (finished runtimes are skipped). |
+| A stage failed | `projects/<id>/state/logs/<stage>.traceback.txt` and `worker_*.log`, `wan_*.log`, `latentsync.log` |
+| Shots fall back to source footage | `wan_generate.log`. Command-line flags differ between Wan releases; adjust `production.video.*_command` in the config. |
+| Lip-sync failed | `latentsync.log`. Adjust `production.lipsync.command`. |
+| Out of GPU memory | Use an 80 GB GPU, or set `production.llm.model: qwen3-14b` (default) and keep a single instance. |
+
+## Honest limitations
+
+- This is the first version and **has not been run end to end yet**. The first run is its real test, so expect to fix some model-specific flags or package versions from the logs.
+- **Active-speaker detection is a heuristic** (lower-face motion plus identity matching), not a trained ASD model. Mappings below the confidence threshold stay `uncertain` and are reported.
+- Wan2.2-Animate replaces **one character per shot** (the speaking or most important visible one). Other people in multi-person shots keep the source footage.
+- Shots with no designed character keep the source footage (`rights.reuse_source_footage: true` for this private learning project).
+- Hindi lip-sync and emotional TTS quality must be judged by watching. The quality report contains only objective metrics.
+- Full-length production of 111 minutes is very long: many GPU-days. The trailer's `cost_report.json` gives a measured estimate.

@@ -1,0 +1,8 @@
+model_id: xtts-v2
+name: Coqui XTTS-v2
+tasks: [tts]
+repository: https://github.com/idiap/coqui-ai-TTS
+weights: {hf_repo: coqui/XTTS-v2}
+licence: {code: MPL-2.0, weights: Coqui Public Model License (non-commercial), personal_use: "yes", commercial_use: "no", sources: [https://huggingface.co/coqui/XTTS-v2]}
+supported_languages: multilingual
+hardware: {runtimes: [cuda], min_vram_gb: 4, recommended_vram_gb: 8}

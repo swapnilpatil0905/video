@@ -1,0 +1,6 @@
+model_id: silero-vad
+name: Silero VAD
+tasks: [vad]
+repository: https://github.com/snakers4/silero-vad
+licence: {code: MIT, weights: MIT, personal_use: "yes", commercial_use: "yes", sources: [https://github.com/snakers4/silero-vad]}
+hardware: {runtimes: [cpu]}

@@ -1,0 +1,53 @@
+# ---- environments ----
+.venv/
+.venv-*/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# ---- secrets (never commit) ----
+.env
+*.env
+!.env.example
+projects/*/secrets*
+huggingface_token.text
+*token*.txt
+*token*.text
+dist/
+.notify_email
+projects/*/sample/
+projects/*/output/
+verification_report/
+
+# ---- data, artifacts, weights (live in object storage, not git) ----
+projects/*/input/
+projects/*/artifacts/
+projects/*/state/
+projects/*/migration/
+weights/
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.npz
+*.onnx
+
+# ---- legacy workspace data (pre-platform; kept on disk, not in git) ----
+/input/
+/audio/
+/transcripts/
+/diarization/
+/scenes/
+/faces/
+/characters/
+/timeline/
+/verification/
+/models/
+
+# ---- misc ----
+.DS_Store
+cloud-pilot-mcp.log
+*.log
+verification_report/
+dist/

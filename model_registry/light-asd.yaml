@@ -1,0 +1,7 @@
+model_id: light-asd
+name: Light-ASD (active speaker detection)
+tasks: [active_speaker_detection]
+repository: https://github.com/Junhua-Liao/Light-ASD
+licence: {code: MIT, weights: trained on AVA-ActiveSpeaker, personal_use: "yes", commercial_use: unknown, notes: Verify the code licence and the dataset terms, sources: [https://github.com/Junhua-Liao/Light-ASD]}
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 2}
+known_limitations: ["Trained mostly on landscape, non-Chinese video. Calibrate on the project_001 labelled set."]
