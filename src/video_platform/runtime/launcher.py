@@ -318,6 +318,10 @@ def start_prefetch(hf_home: Path, repos: list[str], reserve_gb: float, token: st
             return
         api = HfApi(token=token)
         for repo in repos:
+            local = Path(hf_home).parent / "weights" / repo.split("/")[-1]  # setup installs some models here
+            if local.is_dir() and any(local.iterdir()):
+                log.info("prefetch: %s already installed in %s", repo, local)
+                continue
             try:
                 folder = Path(hf_home) / "hub" / ("models--" + repo.replace("/", "--"))
                 info = api.model_info(repo, files_metadata=True)
