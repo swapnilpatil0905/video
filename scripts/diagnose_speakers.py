@@ -114,8 +114,12 @@ def identity_inputs(project: Path) -> None:
             print(f"  cos(0003, 0004) = {float(a @ b):.3f}")
     for stage in ("face_embedding", "face_clustering", "face_detection"):
         record = ctx.index.find_valid(expected[stage])
-        print(f"[{stage}] {expected[stage]}: outputs {[r.uri.rsplit('/', 1)[-1] for r in record.outputs if r.uri]}"
-              if record else f"[{stage}] NOT BUILT")
+        if record is None:
+            print(f"[{stage}] NOT BUILT")
+            continue
+        names = [r.uri.rsplit("/", 1)[-1] for r in record.outputs if r.uri]
+        made_by = record.provenance.get("imported_from") or "platform"
+        print(f"[{stage}] {expected[stage]}: made by {made_by}; {len(names)} outputs, e.g. {names[:2]} … {names[-2:]}")
     record = ctx.index.find_valid(expected["face_embedding"])
     if record:
         ref = next(r for r in record.outputs if r.uri and r.uri.endswith(".npz"))

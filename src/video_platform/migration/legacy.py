@@ -628,13 +628,18 @@ class LegacyImporter:
                 continue
             spec = self.graph.get(stage)
             artifact_id = expected[stage]
+            if self.index.find_valid(artifact_id):
+                report.stages.append(StageImport(stage, artifact_id, "already_cached"))
+                continue
             blocked = [d for d in spec.depends_on if d in not_imported]
+            # legacy outputs only fit legacy inputs: never attach e.g. legacy clusters to platform-made embeddings
+            for d in spec.depends_on:
+                upstream = self.index.find_valid(expected[d])
+                if d not in blocked and upstream is not None and not upstream.provenance.get("imported_from"):
+                    blocked.append(d)
             if blocked:
                 not_imported.add(stage)
                 report.stages.append(StageImport(stage, artifact_id, "skipped_upstream", f"upstream not imported: {blocked}"))
-                continue
-            if self.index.find_valid(artifact_id):
-                report.stages.append(StageImport(stage, artifact_id, "already_cached"))
                 continue
             if stage in LEGACY_PARAMS:
                 differences = _diff(self.planner.stage_params(spec), LEGACY_PARAMS[stage])

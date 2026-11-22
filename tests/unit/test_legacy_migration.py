@@ -109,3 +109,20 @@ def test_cli_config_error_exit_code(tmp_path):
     bad = tmp_path / "config.yaml"
     bad.write_text("project: [not, a, mapping]\n")
     assert main(["--project", str(bad), "--validate-only"]) == 2
+
+
+def test_legacy_stage_is_not_imported_on_top_of_platform_made_upstream(legacy_project, legacy_workspace, fake_probe):
+    """The first real run: platform-made face embeddings (12,962 faces) got the legacy clusters (2,947 faces)
+    attached by face number, scrambling every character identity downstream."""
+    importer, planner, index, _ = _importer(legacy_project, legacy_workspace, fake_probe)
+    importer.import_all()
+    expected = planner.expected_ids()
+    embedding = index.get(expected["face_embedding"])
+    index.put(embedding.model_copy(update={"provenance": {}}))  # as if the platform had built it
+    for stage in ("face_clustering", "character_database"):
+        index.set_status(expected[stage], "superseded")
+    statuses = {s.stage: s.status for s in importer.import_all().stages}
+    assert statuses["face_embedding"] == "already_cached"
+    assert statuses["face_clustering"] == "skipped_upstream"
+    assert statuses["character_database"] == "skipped_upstream"
+    assert index.find_valid(expected["face_clustering"]) is None
