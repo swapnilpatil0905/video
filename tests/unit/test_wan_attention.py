@@ -22,3 +22,12 @@ def test_shapes_dtype_and_key_padding_mask():
     # and it equals attention over only the first 3 keys
     ref = sdpa_flash_attention(q, k[:, :3], v[:, :3], dtype=torch.float32)
     assert torch.allclose(out, ref, atol=1e-5)
+
+
+def test_flash_attn_func_stand_in_matches_layout():
+    from video_platform.workers.wan_attention import flash_attn_func
+
+    q = torch.randn(2, 7, 3, 8)
+    k = torch.randn(2, 5, 3, 8)
+    out = flash_attn_func(q, k, k)
+    assert out.shape == (2, 7, 3, 8)

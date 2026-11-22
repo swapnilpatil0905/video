@@ -49,10 +49,22 @@ def install_fallback() -> str:
     original = attention_module.flash_attention
     patched = 0
     for name, module in list(sys.modules.items()):
-        if name.startswith("wan") and getattr(module, "flash_attention", None) is original:
+        if not name.startswith("wan"):
+            continue
+        if getattr(module, "flash_attention", None) is original:
             module.flash_attention = sdpa_flash_attention
             patched += 1
-    return f"flash-attn missing: PyTorch attention patched into {patched} modules"
+        # modules that import flash_attn_func themselves set it to None when flash-attn is missing
+        # (e.g. wan.modules.animate.face_blocks); same [B, L, heads, C] layout as flash-attn
+        if "flash_attn_func" in vars(module) and module.flash_attn_func is None:
+            module.flash_attn_func = flash_attn_func
+            patched += 1
+    return f"flash-attn missing: PyTorch attention patched into {patched} places"
+
+
+def flash_attn_func(q, k, v, dropout_p=0.0, softmax_scale=None, causal=False, *args, **kwargs):
+    """Stand-in for flash_attn.flash_attn_func: q/k/v [B, L, heads, C] -> [B, Lq, heads, C]."""
+    return sdpa_flash_attention(q, k, v, dropout_p=dropout_p, softmax_scale=softmax_scale, causal=causal)
 
 
 def install_imread_fallback() -> str:
