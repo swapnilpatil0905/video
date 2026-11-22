@@ -47,49 +47,76 @@ class SourceNameMap:
     # ---- names nobody on the cast list owns ----------------------------------------------------------
 
     def unresolved(self) -> list[dict[str, Any]]:
-        return [e for e in self.entries.values() if not e["target"]]
+        return [e for e in self.entries.values() if not e["target"] and e["origin"] != "not_a_name"]
 
     def prompt(self, region: str, naming: dict[str, Any], examples: dict[str, str]) -> dict[str, str] | None:
-        """One prompt naming every unresolved person. `examples`: key → an original line that says the name."""
+        """One prompt resolving every name the cast registry does not already own. `examples`: key → a line using it."""
         todo = self.unresolved()
         if not todo:
             return None
-        taken = sorted({_clean(c.get("display_name") or c.get("given_name")) for c in self.registry.values()} - {""})
+        cast = "\n".join(
+            f"- {cid}: {c.get('display_name') or c.get('given_name')} ({c.get('gender') or '?'}"
+            f"{', ' + str(c.get('profession')) if c.get('profession') else ''}) {str(c.get('background') or '')[:120]}"
+            for cid, c in sorted(self.registry.items()))
         rows = "\n".join(f"- {e['source'] or e['romanized']} ({e['romanized'] or '?'}): \"{examples.get(e['source'] or e['romanized'], '')[:120]}\""
                          for e in todo)
         return {"id": "source_names", "system": (
-            "You adapt a foreign drama for Indian audiences. Every person the dialogue names needs one Indian name "
-            "that fits the region and how they are talked about. Never transliterate the original name, never replace "
-            "a person's name with a place or a description. Answer in JSON only."), "user": (
+            "You adapt a foreign drama for Indian audiences. You decide what each name in the original dialogue refers "
+            "to and give it one Indian replacement. Never transliterate the original, never turn a person into a place "
+            "or a description. The list comes from speech recognition, so expect misspellings of the same name. "
+            "Answer in JSON only."), "user": (
             f"Region: {region}. Naming conventions: {naming.get('conventions', '')}\n"
-            f"Names already used by the cast (do not reuse or imitate): {', '.join(taken) or 'none'}\n"
-            "Names said in the original dialogue, with a line that uses each one:\n" + rows +
-            "\n\nIf two entries are clearly the same person (full name and nickname), give related Indian names "
-            "(e.g. Priya and Priyu). Return JSON: {\"names\": [{\"source\": str (exactly as listed), \"name\": str "
-            "(Indian name in roman letters, the form people say), \"devanagari\": str, \"gender\": \"male\"|\"female\"|null}]}"
+            f"The cast (already renamed; reuse these exact names when an entry refers to one of them):\n{cast or '(none)'}\n"
+            "Entries from the original dialogue, with a line that uses each one:\n" + rows +
+            "\n\nFor every entry choose kind:\n"
+            '- "cast": it is one of the cast above (full name, nickname, "Sister X", "Mr X", misspelling) -> cast_id\n'
+            '- "person": someone else -> a new Indian name; every spelling/nickname of the SAME person gets the SAME name\n'
+            '- "group": a company, family or organisation -> an Indian equivalent keeping the kind (e.g. "Malhotra Group")\n'
+            '- "not_a_name": titles, kinship or job words (mom, sister, boss, doctor, richest man), numbers, places, '
+            "noise -> no replacement\n"
+            'Return JSON: {"names": [{"source": str (exactly as listed), "kind": "cast"|"person"|"group"|"not_a_name", '
+            '"cast_id": str|null, "name": str|null (roman letters, the form people say), "devanagari": str|null}]}'
         )}
 
     def accept(self, answer: Any, min_distance: float = 0.34) -> list[str]:
-        """Apply the model's names; returns problems for names it skipped (those keep no substitution)."""
+        """Apply the model's decisions; returns problems for entries it skipped (those keep no substitution)."""
         items = answer.get("names") if isinstance(answer, dict) else (answer if isinstance(answer, list) else [])
-        used = [_clean(e["target"]) for e in self.entries.values() if e["target"]]
+        cast_names = {_clean(c.get("display_name") or c.get("given_name")): cid for cid, c in self.registry.items()}
+        cast_names.pop("", None)
         problems = []
         for item in items or []:
             if not isinstance(item, dict):
                 continue
             key, name = _clean(item.get("source")), _clean(item.get("name"))
+            kind = _clean(item.get("kind")) or "person"
             entry = self.entries.get(key)
-            if entry is None or entry["target"] or not name:
+            if entry is None or entry["target"]:
+                continue
+            if kind == "not_a_name":
+                entry["origin"] = "not_a_name"
+                continue
+            cid = _clean(item.get("cast_id"))
+            if kind == "cast" or cid in self.registry:
+                c = self.registry.get(cid) or self.registry.get(cast_names.get(name, ""))
+                if not c:
+                    problems.append(f"{key}: unknown cast member {cid or name!r}")
+                    continue
+                entry.update(character_id=c["character_id"] if "character_id" in c else cid,
+                             target=c.get("display_name") or c.get("given_name"), devanagari=c.get("devanagari"),
+                             origin="registry")
+                continue
+            if not name:
+                problems.append(f"{key}: no name given")
                 continue
             original = entry["romanized"] or entry["source"]
             if name_distance(name, original) < min_distance:
                 problems.append(f"{key}: '{name}' is too close to the original name")
                 continue
-            if any(name_distance(name, u) < 0.05 for u in used):
-                problems.append(f"{key}: '{name}' is already used")
+            if any(name_distance(name, n) < 0.05 for n in cast_names):  # a new person must not share a cast name
+                problems.append(f"{key}: '{name}' belongs to the cast")
                 continue
-            entry.update(target=name, devanagari=_clean(item.get("devanagari")) or None, origin="generated")
-            used.append(name)
+            entry.update(target=name, devanagari=_clean(item.get("devanagari")) or None,
+                         origin="group" if kind == "group" else "generated")
         return problems
 
     # ---- using the map ---------------------------------------------------------------------------------
@@ -124,7 +151,7 @@ class SourceNameMap:
                 + "; ".join(rows))
 
     def old_names(self) -> list[str]:
-        return sorted({e["romanized"] for e in self.entries.values() if e["romanized"]})
+        return sorted({e["romanized"] for e in self.entries.values() if e["romanized"] and e["origin"] != "not_a_name"})
 
     def report(self) -> list[dict[str, Any]]:
         return [{k: e[k] for k in ("source", "romanized", "character_id", "target", "devanagari", "origin", "scenes")}

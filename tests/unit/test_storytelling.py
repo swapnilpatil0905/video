@@ -183,3 +183,29 @@ def test_name_score_counts_lines_not_repeated_flags():
     lines = [{"issues": [{"flag": "incorrect_name"}] * 3}, {"issues": []}]
     scores = ScreenplayQualityEvaluator.deterministic_scores(None, lines)
     assert scores["name_usage"] == 50
+
+
+def test_source_name_map_aliases_cast_links_and_non_names():
+    from video_platform.storytelling.name_map import SourceNameMap
+
+    registry = {"SRC_CHAR_0004": {"character_id": "SRC_CHAR_0004", "display_name": "Zahra", "devanagari": "ज़हरा",
+                                  "gender": "female"}}
+    scenes = [{"scene_id": "SCN_0", "names_mentioned": [
+        {"source": "夏夏", "romanized": "Xia Xia"}, {"source": "霞霞姐姐", "romanized": "Xiaxia jiejie"},
+        {"source": "陈大", "romanized": "Chen Da"}, {"source": "陈败", "romanized": "Chen Bai"},
+        {"source": "妈妈", "romanized": "Mama"}, {"source": "大夏集团", "romanized": "Daxia Group"}]}]
+    m = SourceNameMap(scenes, registry)
+    assert "SRC_CHAR_0004: Zahra (female)" in m.prompt("Hyderabad", {}, {})["user"]
+    problems = m.accept({"names": [
+        {"source": "夏夏", "kind": "cast", "cast_id": "SRC_CHAR_0004"},
+        {"source": "霞霞姐姐", "kind": "cast", "cast_id": "SRC_CHAR_0004"},
+        {"source": "陈大", "kind": "person", "name": "Chandrashekhar"},
+        {"source": "陈败", "kind": "person", "name": "Chandrashekhar"},  # same person, misheard: same name is fine
+        {"source": "妈妈", "kind": "not_a_name"},
+        {"source": "大夏集团", "kind": "group", "name": "Malhotra Group"}]})
+    assert problems == []
+    assert m.apply("夏夏和霞霞姐姐见了陈大和陈败，妈妈在大夏集团") == "Zahra和Zahra见了Chandrashekhar和Chandrashekhar，妈妈在Malhotra Group"
+    assert m.unresolved() == [] and "Mama" not in m.old_names()
+    assert m.accept({"names": []}) == []
+    m2 = SourceNameMap([{"scene_id": "S", "names_mentioned": [{"source": "许明", "romanized": "Xu Ming"}]}], registry)
+    assert m2.accept({"names": [{"source": "许明", "kind": "person", "name": "Zahra"}]}) == ["许明: 'Zahra' belongs to the cast"]

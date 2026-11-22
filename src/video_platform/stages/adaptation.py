@@ -238,11 +238,14 @@ def localization(s: StageContext) -> None:
     names_prompt = name_map.prompt(region, pm.naming(), examples)
     if names_prompt:
         answer = call_llm(s, [names_prompt], model_id=models["writer"], tag="names", max_tokens=loc.max_tokens)
-        for problem in name_map.accept(answer.get("source_names"), loc.character_names.min_name_distance):
-            s.warn(f"source names: {problem}")
+        problems = name_map.accept(answer.get("source_names"), loc.character_names.min_name_distance)
+        if problems:
+            s.warn(f"source names: {len(problems)} entries kept no replacement: {problems[:8]}")
     s.put_json("name_map.json", name_map.report())
     s.metric("source_names", len(name_map.entries))
     s.metric("source_names_unmapped", len(name_map.unresolved()))
+    s.metric("source_names_not_names", sum(e["origin"] == "not_a_name" for e in name_map.entries.values()))
+    s.metric("source_names_cast", sum(e["origin"] == "registry" for e in name_map.entries.values()))
     old_names = [d.get("name") for d in designs] + name_map.old_names()
     registry_names = [c["given_name"] for c in registry.values()] + [c.get("family_name") or "" for c in registry.values()]
     old_names = [n for n in old_names if n and all(name_distance(n, r) > 0.05 for r in registry_names if r)]
