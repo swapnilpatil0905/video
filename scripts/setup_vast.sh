@@ -105,6 +105,25 @@ PY
 }
 
 # ---- Wan2.2 (character replacement) ------------------------------------------------
+wan_ort() {  # python — pose detection runs in ONNX Runtime; make sure the GPU build is the one installed
+    local py="$1"
+    "$py" -c "import onnxruntime as o, sys; sys.exit(0 if 'CUDAExecutionProvider' in o.get_available_providers() else 1)" 2>/dev/null && return 0
+    uv pip uninstall --python "$py" onnxruntime >/dev/null 2>&1 || true
+    uv pip install --python "$py" --reinstall onnxruntime-gpu && echo "onnxruntime-gpu installed (falls back to CPU by itself if its CUDA build cannot run here)"
+}
+
+wan_sam2() {  # python repo — SAM2 the way Wan expects it: from a source checkout (its configs are .yaml files that
+    # a normal install leaves out), at the commit Wan pins, on the import path via a .pth file
+    local py="$1" repo="$2" src="$RT/repos/sam2" commit site
+    commit=$(grep -oE 'sam2\.git@[0-9a-f]{7,40}' "$repo"/requirements_animate.txt 2>/dev/null | head -1 | cut -d@ -f2)
+    [[ -d "$src/.git" ]] || git clone https://github.com/facebookresearch/sam2.git "$src" || return 1
+    if [[ -n "$commit" ]]; then git -C "$src" fetch -q origin "$commit" 2>/dev/null; git -C "$src" checkout -q "$commit" || return 1; fi
+    uv pip uninstall --python "$py" sam-2 sam2 >/dev/null 2>&1 || true
+    site=$("$py" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+    echo "$src" > "$site/sam2_source.pth"
+    echo "SAM2 from source: $src @ ${commit:-HEAD}"
+}
+
 wan_extras() {  # python repo — animate/s2v requirements, one package at a time so one failure cannot block the rest
     # uv rejects "-e git+…" (SAM2): install those non-editable. SAM2's CUDA extension (mask hole-filling only)
     # does not compile against new torch headers: skip it. flash_attn is optional and handled separately.
@@ -113,7 +132,7 @@ wan_extras() {  # python repo — animate/s2v requirements, one package at a tim
         [[ -f "$extra" ]] || continue
         while IFS= read -r line || [[ -n "$line" ]]; do
             line="${line%%#egg=*}"; line="$(sed -E 's/^[[:space:]]*-e[[:space:]]+//; s/[[:space:]]+#.*$//' <<<"$line")"
-            [[ -z "${line// }" || "$line" == \#* || "$line" =~ ^(flash[-_]attn|-r|--) ]] && continue
+            [[ -z "${line// }" || "$line" == \#* || "$line" =~ ^(flash[-_]attn|-r|--) || "$line" == *sam2.git* ]] && continue
             SAM2_BUILD_CUDA=0 SAM2_BUILD_ALLOW_ERRORS=1 uv pip install --python "$py" --no-build-isolation "$line" \
                 || failed+=("$line")
         done < "$extra"
@@ -134,6 +153,8 @@ if want wan; then
             grep -v -i '^flash_attn' "$REPO/requirements.txt" > "$RT/venvs/wan/req.txt"
             uv pip install --python "$PY" -r "$RT/venvs/wan/req.txt"
             wan_extras "$PY" "$REPO"
+            wan_sam2 "$PY" "$REPO" || echo "!! SAM2 source checkout failed"
+            wan_ort "$PY" || echo "!! onnxruntime-gpu not installed (pose detection on CPU)"
             uv pip install --python "$PY" --no-build-isolation flash_attn || echo "flash_attn unavailable (slower attention)"
             uv pip install --python "$PY" sageattention safetensors || echo "sageattention unavailable (balanced profile uses default attention)"
             fetch Wan-AI/Wan2.2-Animate-14B "$RT/weights/Wan2.2-Animate-14B"
@@ -219,11 +240,13 @@ done
 if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing has its own requirements
     # preprocessing imports, the full wan package (generation imports every pipeline), and the PyTorch
     # attention fallback for missing flash-attn, run once on the GPU
-    WAN_PRE='import sys; sys.path.insert(0, "."); sys.path.insert(0, "wan/modules/animate/preprocess"); import process_pipepline; import torch, wan; from video_platform.workers.wan_attention import install_fallback, sdpa_flash_attention as fa; print(install_fallback()); q = torch.randn(1, 64, 8, 64, device="cuda", dtype=torch.bfloat16); k = torch.randn(1, 40, 8, 64, device="cuda", dtype=torch.bfloat16); assert fa(q, k, k, k_lens=torch.tensor([25], device="cuda")).shape == q.shape'
+    WAN_PRE='import sys; sys.path.insert(0, "."); sys.path.insert(0, "wan/modules/animate/preprocess"); import process_pipepline; import os, sam2_configs; assert os.path.exists(os.path.join(os.path.dirname(sam2_configs.__file__), "sam2_hiera_l.yaml")), "SAM2 configs missing"; import torch, wan; from video_platform.workers.wan_attention import install_fallback, sdpa_flash_attention as fa; print(install_fallback()); q = torch.randn(1, 64, 8, 64, device="cuda", dtype=torch.bfloat16); k = torch.randn(1, 40, 8, 64, device="cuda", dtype=torch.bfloat16); assert fa(q, k, k, k_lens=torch.tensor([25], device="cuda")).shape == q.shape'
     export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
     if ! (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") >>"$LOGS/setup_wan.log" 2>&1; then
         say "wan: installing animation preprocessing requirements (log: $LOGS/setup_wan.log)"
         wan_extras "$RT/venvs/wan/bin/python" "$RT/repos/Wan2.2" >>"$LOGS/setup_wan.log" 2>&1
+        wan_sam2 "$RT/venvs/wan/bin/python" "$RT/repos/Wan2.2" >>"$LOGS/setup_wan.log" 2>&1 || echo "!! SAM2 source checkout failed" >>"$LOGS/setup_wan.log"
+        wan_ort "$RT/venvs/wan/bin/python" >>"$LOGS/setup_wan.log" 2>&1 || echo "!! onnxruntime-gpu not installed" >>"$LOGS/setup_wan.log"
         # the preprocessing code imports packages its requirements file does not list (e.g. moviepy):
         # install whatever the import reports missing, a few rounds at most
         for round in 1 2 3 4 5 6 7 8 9 10; do
@@ -232,7 +255,7 @@ if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing 
             [[ -z "$missing" ]] && break
             case "$missing" in
                 cv2) pkg=opencv-python ;; PIL) pkg=pillow ;; sklearn) pkg=scikit-learn ;; yaml) pkg=pyyaml ;;
-                skimage) pkg=scikit-image ;; sam2) pkg="git+https://github.com/facebookresearch/sam2.git" ;;
+                skimage) pkg=scikit-image ;; hydra) pkg=hydra-core ;; sam2) pkg="git+https://github.com/facebookresearch/sam2.git" ;;
                 *) pkg="$missing" ;;
             esac
             echo "wan preprocessing: installing missing module $missing ($pkg)" >>"$LOGS/setup_wan.log"
