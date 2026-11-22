@@ -105,6 +105,24 @@ PY
 }
 
 # ---- Wan2.2 (character replacement) ------------------------------------------------
+sam2_no_ext() {  # src — the pinned SAM2 needs its CUDA extension for mask hole-filling; we do not build it.
+    # Do what newer SAM2 releases do: skip that post-processing step when the extension is missing. Idempotent.
+    local f="$1/sam2/utils/misc.py"
+    [[ -f "$f" ]] || return 0
+    grep -q "VP: SAM2 extension" "$f" && return 0
+    "$RT/venvs/wan/bin/python" - "$f" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+old = "    labels, areas = get_connected_components(mask <= 0)\n"
+new = ("    try:\n"
+       "        labels, areas = get_connected_components(mask <= 0)\n"
+       "    except ImportError:  # VP: SAM2 extension not built; skip hole filling like newer SAM2 releases\n"
+       "        return mask\n")
+if old in s:
+    p.write_text(s.replace(old, new, 1)); print("SAM2: hole filling skipped without its CUDA extension")
+PY
+}
+
 wan_ort() {  # python — pose detection runs in ONNX Runtime; make sure the GPU build is the one installed
     local py="$1"
     "$py" -c "import onnxruntime as o, sys; sys.exit(0 if 'CUDAExecutionProvider' in o.get_available_providers() else 1)" 2>/dev/null && return 0
@@ -122,6 +140,7 @@ wan_sam2() {  # python repo — SAM2 the way Wan expects it: from a source check
     site=$("$py" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
     echo "$src" > "$site/sam2_source.pth"
     echo "SAM2 from source: $src @ ${commit:-HEAD}"
+    sam2_no_ext "$src"
 }
 
 wan_extras() {  # python repo — animate/s2v requirements, one package at a time so one failure cannot block the rest
@@ -238,6 +257,7 @@ for env in tts indicf5 parler latentsync wan image audio diar asd sep llm diariz
     want "$env" && gpu_fix "$env"
 done
 if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing has its own requirements
+    sam2_no_ext "$RT/repos/sam2" >>"$LOGS/setup_wan.log" 2>&1
     # preprocessing imports, the full wan package (generation imports every pipeline), and the PyTorch
     # attention fallback for missing flash-attn, run once on the GPU
     WAN_PRE='import sys; sys.path.insert(0, "."); sys.path.insert(0, "wan/modules/animate/preprocess"); import process_pipepline; import os, sam2_configs; assert os.path.exists(os.path.join(os.path.dirname(sam2_configs.__file__), "sam2_hiera_l.yaml")), "SAM2 configs missing"; import torch, wan; from video_platform.workers.wan_attention import install_fallback, sdpa_flash_attention as fa; print(install_fallback()); q = torch.randn(1, 64, 8, 64, device="cuda", dtype=torch.bfloat16); k = torch.randn(1, 40, 8, 64, device="cuda", dtype=torch.bfloat16); assert fa(q, k, k, k_lens=torch.tensor([25], device="cuda")).shape == q.shape'
