@@ -300,6 +300,9 @@ class FakeRuntime:
             log.warning("saved %s answer for %s will NOT be reused: the request differs from the saved one "
                         "(changed prompt or settings — or non-deterministic prompt text)", worker, stage)
 
+    def repo(self, name: str) -> Path:
+        return Path(f"/dry-run/repos/{name}")  # never opened: the workers that use it are simulated
+
     def run_command(self, runtime, argv, **_kw):
         raise StageFailure(f"dry run: external command for runtime '{runtime}' is not simulated")
 
@@ -339,6 +342,23 @@ class FakeRuntime:
                         _png(v["out"])
                         self.derived[self._key(v["out"])] = (j["master"], 0.8)  # same person, new pose
                     results[j["id"]] = {"variants": {k: v["out"] for k, v in j["variants"].items()}, "errors": []}
+            return {"results": results}
+        if worker == "faces" and request.get("mode") == "embed":  # gender/age of each character's sample crops
+            attributes = {}
+            for crop in request["crops"]:
+                owner = crop["face_id"].split("|")[0]
+                h = int(hashlib.md5(owner.encode()).hexdigest(), 16)
+                attributes[crop["face_id"]] = {"gender": "MF"[h % 2], "age": 22 + h % 40}
+            return {"attributes": attributes}
+        if worker in ("asd", "asd_light"):  # one visible, clearly speaking character per line (stable per line)
+            names = sorted(request.get("centroids") or {})
+            results = {}
+            for seg in request["segments"]:
+                chars = {}
+                if names:
+                    pick = names[int(hashlib.md5(seg["segment_id"].encode()).hexdigest(), 16) % len(names)]
+                    chars[pick] = {"visible_ratio": 1.0, "motion": 0.9}
+                results[seg["segment_id"]] = {"characters": chars}
             return {"results": results}
         if worker == "voice_design":
             voices = {}
