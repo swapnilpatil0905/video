@@ -1,2 +1,4 @@
 git+https://github.com/huggingface/parler-tts.git
 soundfile>=0.12
+# sentencepiece's generated model_pb2 needs google.protobuf.runtime_version (protobuf >= 5.26)
+protobuf>=5.26.1

@@ -266,6 +266,9 @@ class Runner:
                                 log.warning("after-stage hook failed: %s", exc)
                     except BaseException as exc:  # noqa: BLE001 - collected, re-raised after running stages finish
                         errors.append(exc)
+                        log.error("✘ stage %s failed: %s%s", spec.name, str(exc)[:500],
+                                  f" — no new stages start; waiting for {', '.join(s.name for s in running.values())}"
+                                  if running else "")
         if errors:
             raise errors[0]
         return executed

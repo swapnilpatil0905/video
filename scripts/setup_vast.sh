@@ -78,6 +78,8 @@ want diar   && mkvenv diar   "$RT/venvs/diar"   "$ROOT/requirements/diar.txt"
 want audio  && mkvenv audio  "$RT/venvs/audio"  "$ROOT/requirements/audio.txt"
 want llm    && mkvenv llm    "$RT/venvs/llm"    "$ROOT/requirements/llm.txt"
 want parler && mkvenv parler "$RT/venvs/parler" "$ROOT/requirements/parler.txt"
+want parler && { "$RT/venvs/parler/bin/python" -c "from sentencepiece import sentencepiece_model_pb2; import parler_tts" \
+    >>"$LOGS/setup_parler.log" 2>&1 || { rm -f "$RT/venvs/parler/.vp_ok"; fail "parler (import check)"; }; }
 want tts    && mkvenv tts    "$RT/venvs/tts"    "$ROOT/requirements/tts.txt"
 want image  && mkvenv image  "$RT/venvs/image"  "$ROOT/requirements/image.txt"
 want sep     && mkvenv sep     "$RT/venvs/sep"     "$ROOT/requirements/sep.txt"
@@ -146,10 +148,12 @@ if want diarizen; then
             [[ -d "$REPO/.git" ]] || git clone --recursive --depth 1 https://github.com/BUTSpeechFIT/DiariZen.git "$REPO"
             uv venv --allow-existing --python 3.11 "$RT/venvs/diarizen"
             PY="$RT/venvs/diarizen/bin/python"
-            uv pip install --python "$PY" torch torchaudio
-            [[ -f "$REPO/requirements.txt" ]] && uv pip install --python "$PY" -r "$REPO/requirements.txt"
-            uv pip install --python "$PY" -e "$REPO"
-            [[ -d "$REPO/pyannote-audio" ]] && uv pip install --python "$PY" -e "$REPO/pyannote-audio"
+            # DiariZen's bundled pyannote-audio imports torchaudio.AudioMetaData, removed in torchaudio 2.9
+            PIN="$RT/venvs/diarizen/constraints.txt"; printf 'torch<2.9\ntorchaudio<2.9\n' >"$PIN"
+            uv pip install --python "$PY" -c "$PIN" torch torchaudio
+            [[ -f "$REPO/requirements.txt" ]] && uv pip install --python "$PY" -c "$PIN" -r "$REPO/requirements.txt"
+            uv pip install --python "$PY" -c "$PIN" -e "$REPO"
+            [[ -d "$REPO/pyannote-audio" ]] && uv pip install --python "$PY" -c "$PIN" -e "$REPO/pyannote-audio"
             "$PY" -c "from diarizen.pipelines.inference import DiariZenPipeline; print('diarizen import ok')"
         } >"$LOGS/setup_diarizen.log" 2>&1 && touch "$RT/venvs/diarizen/.vp_ok" || fail diarizen
     else say "diarizen: ready"; fi
