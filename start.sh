@@ -136,6 +136,9 @@ case "$CMD" in
         pkill -f "video_platform.workers" || true
         pkill -f "bash start.sh (run|resume|approve|smoke)" || true
         pkill -f "bash scripts/setup_vast.sh" || true
+        pkill -f "bash start.sh watch" || true
+        # a run suspended with Ctrl-Z ignores TERM until it is continued: wake it so it can exit
+        pkill -CONT -f "run.py --project|video_platform.workers|bash start.sh|bash scripts/setup_vast.sh" 2>/dev/null || true
         sleep 3
         # model engines run as separate processes (vLLM "VLLM::EngineCore", multiprocessing children)
         pkill -9 -f "VLLM::|vllm.entrypoints|/workspace/vp/venvs/" 2>/dev/null || true
