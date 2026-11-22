@@ -108,9 +108,10 @@ def run(request: dict) -> dict:
         import wan
         from wan.configs import WAN_CONFIGS
 
-        from .wan_attention import install_fallback
+        from .wan_attention import install_fallback, install_imread_fallback
 
         attention_note = install_fallback()  # Wan asserts flash-attn; use PyTorch attention if it is missing
+        install_imread_fallback()  # OpenCV may fail to decode PNGs in this process (zlib clash)
 
         cfg = WAN_CONFIGS[request.get("task", "animate-14B")]
         model_cls = getattr(wan, "WanAnimate")

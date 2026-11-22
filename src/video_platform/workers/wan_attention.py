@@ -55,6 +55,35 @@ def install_fallback() -> str:
     return f"flash-attn missing: PyTorch attention patched into {patched} modules"
 
 
+def install_imread_fallback() -> str:
+    """cv2.imread can return None for valid PNGs inside the Wan process ("libpng error: bad parameters to
+    zlib": two zlib builds loaded). When it does, read the file with Pillow and return what OpenCV would."""
+    import os
+
+    import cv2
+    import numpy as np
+
+    original = getattr(cv2.imread, "_vp_original", cv2.imread)
+
+    def imread(path, flags=cv2.IMREAD_COLOR):
+        image = original(path, flags)
+        if image is not None or not os.path.isfile(str(path)):
+            return image
+        from PIL import Image
+
+        with Image.open(path) as im:
+            if flags == cv2.IMREAD_GRAYSCALE:
+                return np.array(im.convert("L"))
+            if flags == cv2.IMREAD_UNCHANGED and im.mode in ("RGBA", "LA"):
+                rgba = np.array(im.convert("RGBA"))
+                return rgba[..., [2, 1, 0, 3]].copy()
+            return np.array(im.convert("RGB"))[..., ::-1].copy()
+
+    imread._vp_original = original
+    cv2.imread = imread
+    return "cv2.imread falls back to Pillow when OpenCV cannot decode a file"
+
+
 def main() -> int:
     """Launcher: patch, then run a Wan script (first argument) as __main__ with the remaining arguments."""
     if len(sys.argv) < 2:
@@ -65,6 +94,7 @@ def main() -> int:
     import wan  # noqa: F401  (loads the modules to patch; cwd is the Wan repo)
 
     print(install_fallback(), file=sys.stderr, flush=True)
+    print(install_imread_fallback(), file=sys.stderr, flush=True)
     sys.argv = [script, *sys.argv[2:]]
     runpy.run_path(script, run_name="__main__")
     return 0
