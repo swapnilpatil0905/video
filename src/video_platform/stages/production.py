@@ -565,7 +565,8 @@ class Producer:
         self.notes.append(note)
         log.info(note)
         files = {p.name: p for p in item.path("x").parent.glob("*.wav")}
-        item.finish(files, {"engine": engine, "cer": cer, "seconds": round(time.time() - started, 1)})
+        if any(v is not None for v in cer.values()):  # a bake-off where no engine was measured decides nothing
+            item.finish(files, {"engine": engine, "cer": cer, "seconds": round(time.time() - started, 1)})
         return engine
 
     def synthesize(self, placed: list[dict]) -> dict[str, dict]:

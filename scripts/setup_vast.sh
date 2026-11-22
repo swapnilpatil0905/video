@@ -216,7 +216,10 @@ for env in tts indicf5 parler latentsync wan image audio diar asd sep llm diariz
     want "$env" && gpu_fix "$env"
 done
 if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing has its own requirements
-    WAN_PRE='import sys; sys.path.insert(0, "wan/modules/animate/preprocess"); import process_pipepline'
+    # preprocessing imports, the full wan package (generation imports every pipeline), and the PyTorch
+    # attention fallback for missing flash-attn, run once on the GPU
+    WAN_PRE='import sys; sys.path.insert(0, "."); sys.path.insert(0, "wan/modules/animate/preprocess"); import process_pipepline; import torch, wan; from video_platform.workers.wan_attention import install_fallback, sdpa_flash_attention as fa; print(install_fallback()); q = torch.randn(1, 64, 8, 64, device="cuda", dtype=torch.bfloat16); k = torch.randn(1, 40, 8, 64, device="cuda", dtype=torch.bfloat16); assert fa(q, k, k, k_lens=torch.tensor([25], device="cuda")).shape == q.shape'
+    export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
     if ! (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") >>"$LOGS/setup_wan.log" 2>&1; then
         say "wan: installing animation preprocessing requirements (log: $LOGS/setup_wan.log)"
         wan_extras "$RT/venvs/wan/bin/python" "$RT/repos/Wan2.2" >>"$LOGS/setup_wan.log" 2>&1

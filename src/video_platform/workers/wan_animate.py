@@ -108,6 +108,10 @@ def run(request: dict) -> dict:
         import wan
         from wan.configs import WAN_CONFIGS
 
+        from .wan_attention import install_fallback
+
+        attention_note = install_fallback()  # Wan asserts flash-attn; use PyTorch attention if it is missing
+
         cfg = WAN_CONFIGS[request.get("task", "animate-14B")]
         model_cls = getattr(wan, "WanAnimate")
         init = _accepts(model_cls.__init__, {
@@ -122,7 +126,7 @@ def run(request: dict) -> dict:
     except Exception:
         return {"fatal": traceback.format_exc()[-3000:], "results": {}}
 
-    notes = {}
+    notes = {"flash_attention": attention_note}
     lora = request.get("lora")
     if lora:
         try:

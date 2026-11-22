@@ -639,7 +639,8 @@ class VideoGenSpec(StrictModel):
         "--replace_flag",
     ])
     generate_command: list[str] = Field(default_factory=lambda: [
-        "{python}", "generate.py", "--task", "animate-14B", "--ckpt_dir", "{weights}/Wan2.2-Animate-14B",
+        "{python}", "-m", "video_platform.workers.wan_attention",  # patches flash-attn → PyTorch if missing
+        "generate.py", "--task", "animate-14B", "--ckpt_dir", "{weights}/Wan2.2-Animate-14B",
         "--src_root_path", "{workdir}/process", "--refert_num", "1", "--replace_flag", "--use_relighting_lora",
         "--base_seed", "{seed}", "--save_file", "{out}", "--offload_model", "{offload}", "--convert_model_dtype",
         "--sample_steps", "{steps}",
