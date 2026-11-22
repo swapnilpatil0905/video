@@ -221,14 +221,14 @@ stages:
     milestone: M3
 
   - name: localization
-    version: "3"
+    version: "4"
     description: Indian screenplay adaptation per analysed scene, audio direction per line, quality review + rewrites.
     depends_on: [scene_analysis, character_identity, character_design, alignment, emotion, speaker_mapping]
     runtime: llm-gpu
     params_from: [production.llm, localization]
     model_from: [localization.models.writer, localization.models.naturalness_reviewer,
                  localization.models.screenplay_reviewer, production.llm.model, production.llm.polish_model]
-    outputs: [localized_lines.json, screenplay_quality.json, screenplay_versions.json]
+    outputs: [localized_lines.json, screenplay_quality.json, screenplay_versions.json, name_map.json]
     milestone: M3
 
   # ---- assets -------------------------------------------------------------------

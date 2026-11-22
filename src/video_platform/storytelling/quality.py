@@ -39,7 +39,7 @@ class ScreenplayQualityEvaluator:
         self.references = references
         self.profiles = profiles
         self.conversation = conversation
-        self.old_names = [n for n in (old_names or []) if n and len(n) >= 3]
+        self.old_names = sorted({n for n in (old_names or []) if n and len(n) >= 3})
 
     # ---- deterministic ------------------------------------------------------------------
 
@@ -84,7 +84,7 @@ class ScreenplayQualityEvaluator:
 
     def deterministic_scores(self, lines: list[dict[str, Any]]) -> dict[str, int]:
         n = max(1, len(lines))
-        flags = Counter(i["flag"] for ln in lines for i in ln.get("issues", []))
+        flags = Counter(f for ln in lines for f in {i["flag"] for i in ln.get("issues", [])})  # lines, not flags
         fills = [ln["timing"]["fill"] for ln in lines if ln.get("timing", {}).get("fill")]
         lipsync = 100 - int(100 * sum(abs(1 - f) for f in fills) / max(1, len(fills))) if fills else None
         return {

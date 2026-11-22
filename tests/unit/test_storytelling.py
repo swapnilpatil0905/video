@@ -155,3 +155,31 @@ def test_prompts_are_identical_across_processes():
     outs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                            env={**os.environ, "PYTHONPATH": src, "PYTHONHASHSEED": seed}).stdout for seed in ("1", "2", "3")}
     assert len(outs) == 1 and next(iter(outs)).strip()
+
+
+def test_source_name_map_maps_cast_and_talked_about_people():
+    from video_platform.storytelling.name_map import SourceNameMap
+
+    registry = {"SRC_CHAR_0001": {"display_name": "Zahra", "given_name": "Zahra", "devanagari": "ज़हरा"}}
+    scenes = [{"scene_id": "SCN_0", "names_mentioned": [
+        {"source": "陈戴", "romanized": "Chen Dai", "character_id": "SRC_CHAR_0001"},
+        {"source": "许明", "romanized": "Xu Ming", "character_id": None},
+        {"source": "夏", "romanized": "", "character_id": None}]}]  # one CJK character: too ambiguous
+    m = SourceNameMap(scenes, registry)
+    assert [e["source"] for e in m.unresolved()] == ["许明"]
+    assert "许明" in m.prompt("Hyderabad", {}, {"许明": "有人想让许明死了，"})["user"]
+    problems = m.accept({"names": [{"source": "许明", "name": "Xu Min"}]})  # too close to the original
+    assert problems and m.unresolved()
+    assert m.accept({"names": [{"source": "许明", "name": "Imran", "devanagari": "इमरान"}]}) == []
+    assert m.apply("有人想让许明死了，陈戴知道") == "有人想让Imran死了，Zahra知道"
+    note = m.note(["有人想让许明死了，"])
+    assert "许明 (Xu Ming) → Imran (इमरान)" in note and "Zahra" not in note
+    assert m.old_names() == ["Chen Dai", "Xu Ming"]
+
+
+def test_name_score_counts_lines_not_repeated_flags():
+    from video_platform.storytelling.quality import ScreenplayQualityEvaluator
+
+    lines = [{"issues": [{"flag": "incorrect_name"}] * 3}, {"issues": []}]
+    scores = ScreenplayQualityEvaluator.deterministic_scores(None, lines)
+    assert scores["name_usage"] == 50

@@ -18,6 +18,7 @@ from ..storytelling import (
     RegionalEnvironmentAdapter, RegionalLanguageProfileManager, ScreenplayEnhancementEngine,
     ScreenplayQualityEvaluator,
 )
+from ..storytelling.name_map import SourceNameMap
 from ..storytelling.names import name_distance
 from .analysis import load_segments
 from .story import answer_items, as_dict, batched, call_llm, lang_name
@@ -226,9 +227,23 @@ def localization(s: StageContext) -> None:
     writer = IndianDialogueRewriter(target=tgt, region=region, style=loc.writing_style, register=loc.speech_register,
                                     conversation=conversation, direction_schema=planner.schema(),
                                     originality_rule=refs.rule())
-    old_names = [d.get("name") for d in designs]
+    name_map = SourceNameMap(scenes, registry)
+    examples = {}
     for scene in scenes:
-        old_names += [n.get("romanized") for n in scene.get("names_mentioned", []) if n.get("romanized")]
+        for sid in scene["segment_ids"]:
+            for e in name_map.unresolved():
+                key = e["source"] or e["romanized"]
+                if key not in examples and key in segments[sid]["text"]:
+                    examples[key] = segments[sid]["text"]
+    names_prompt = name_map.prompt(region, pm.naming(), examples)
+    if names_prompt:
+        answer = call_llm(s, [names_prompt], model_id=models["writer"], tag="names", max_tokens=loc.max_tokens)
+        for problem in name_map.accept(answer.get("source_names"), loc.character_names.min_name_distance):
+            s.warn(f"source names: {problem}")
+    s.put_json("name_map.json", name_map.report())
+    s.metric("source_names", len(name_map.entries))
+    s.metric("source_names_unmapped", len(name_map.unresolved()))
+    old_names = [d.get("name") for d in designs] + name_map.old_names()
     registry_names = [c["given_name"] for c in registry.values()] + [c.get("family_name") or "" for c in registry.values()]
     old_names = [n for n in old_names if n and all(name_distance(n, r) > 0.05 for r in registry_names if r)]
     evaluator = ScreenplayQualityEvaluator(min_score=q.min_score, duration=duration, environment=env, references=refs,
@@ -244,6 +259,10 @@ def localization(s: StageContext) -> None:
 
     def name_of(cid: str | None, sid: str) -> str:
         return registry[cid]["display_name"] if cid in registry else (segments[sid].get("speaker_id") or "someone")
+
+    def with_names(characters: str, sids: list[str]) -> str:
+        note = name_map.note([segments[x]["text"] for x in sids])
+        return f"{characters}\n{note}" if note else characters
 
     def writer_prompts(targets: dict[str, list[str]], feedback: dict[str, str], tag: str) -> list[dict]:
         prompts = []
@@ -266,16 +285,17 @@ def localization(s: StageContext) -> None:
                 b = duration.budget(avail)
                 return (f"{sid} | {name_of(cid, sid)} → {listener_name} | {avail:.1f}s | {b['target']}/{b['max']} | "
                         f"{ctx.get('intention') or ''} | {ctx.get('emotion') or emotions.get(sid, {}).get('emotion', '')} | "
-                        f"{seg['text']}")
+                        f"{name_map.apply(seg['text'])}")
 
             def build(part: list[str], pid: str) -> dict:
                 first = scene["segment_ids"].index(part[0])
                 before = [f"{name_of(speaker_of(x), x)}: {lines[x]['target_text']}" if x in lines and lines[x].get("target_text")
-                          else f"{name_of(speaker_of(x), x)}: ({segments[x]['text']})"
+                          else f"{name_of(speaker_of(x), x)}: ({name_map.apply(segments[x]['text'])})"
                           for x in scene["segment_ids"][max(0, first - 4):first]]
                 fb = "\n".join(f"{x}: {feedback[x]}" for x in part if x in feedback)
                 return writer.prompt(pid, scene=scene, enhancement=scene["enhancement_plan"]["instructions"] +
-                                     ("\n" + technique if technique else ""), characters=character_lines(chars, registry, pm),
+                                     ("\n" + technique if technique else ""),
+                                     characters=with_names(character_lines(chars, registry, pm), part),
                                      expressions=pm.expressions_for_prompt(intensity),
                                      places=env.allowed_places(plan), fictional=plan.get("fictional_places", []),
                                      lines=[row(x) for x in part], previous_lines=before, feedback=fb)
@@ -355,8 +375,9 @@ def localization(s: StageContext) -> None:
                     ln = lines[x]
                     prof = registry.get(ln["character_id"] or "", {}).get("language_profile") or pm.default_character_profile()
                     rows.append(f"{x} | {ln['character_name']}: {pm.describe_for_prompt(prof)} | {ln['target_duration_s']:.1f}s | "
-                                f"{scene['mood']} | {ln['source_text']} | {ln['target_text']}")
-                p = evaluator.naturalness_prompt(f"{scene['scene_id']}_{tag}{j}", rows, f"Scene: {scene.get('summary', '')}")
+                                f"{scene['mood']} | {name_map.apply(ln['source_text'])} | {ln['target_text']}")
+                p = evaluator.naturalness_prompt(f"{scene['scene_id']}_{tag}{j}", rows,
+                                                 with_names(f"Scene: {scene.get('summary', '')}", part))
                 p["system"] = system
                 prompts.append(p)
         if not prompts:
@@ -395,10 +416,10 @@ def localization(s: StageContext) -> None:
         prompts = []
         for scene in scenes:
             rows = [f"{x} | {lines[x]['character_name']} | {lines[x]['target_duration_s']:.1f}s | "
-                    f"{lines[x].get('meaning_en') or segments[x]['text']} | {lines[x]['target_text']} | "
+                    f"{name_map.apply(lines[x].get('meaning_en') or segments[x]['text'])} | {lines[x]['target_text']} | "
                     f"{lines[x]['direction']['emotion']}/{lines[x]['direction']['delivery']}" for x in scene["segment_ids"]]
             chars = sorted({speaker_of(x) for x in scene["segment_ids"]} - {None})
-            p = evaluator.screenplay_prompt(scene, rows, character_lines(chars, registry, pm), "")
+            p = evaluator.screenplay_prompt(scene, rows, with_names(character_lines(chars, registry, pm), scene["segment_ids"]), "")
             p["id"] = f"{scene['scene_id']}_{tag}"
             p["system"] = system
             prompts.append(p)

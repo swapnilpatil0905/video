@@ -150,6 +150,11 @@ class FakeLLM:
                                      "dialect_intensity": 0.8 if i % 2 == 0 else 0.2, "english_mixing": 0.4,
                                      "urdu_influence": 0.6, "speaking_style": "casual", "speech_habits": ["says arre"]},
             } for i, c in enumerate(ids)]}
+        if pid == "source_names":
+            keys = re.findall(r"^- (\S+) \(", user, re.M)
+            pool = ["Imran", "Lakshmi", "Farhan", "Divya", "Naveen", "Ruksana"]
+            return {"names": [{"source": k, "name": pool[i % len(pool)] + ("" if i < len(pool) else str(i)),
+                               "devanagari": "इमरान", "gender": None} for i, k in enumerate(keys)]}
         if "Scene lines" in user:
             ids = _rows_after(user, "Scene lines")
             moods = ["comedy", "tragedy", "confrontation", "romance", "neutral"]
