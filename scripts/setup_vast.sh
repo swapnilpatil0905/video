@@ -92,7 +92,7 @@ check_import() {  # name python-code — verify an optional runtime actually wor
     fi
 }
 want sep     && check_import sep "import audio_separator"
-want indicf5 && check_import indicf5 "import transformers, soundfile"
+want indicf5 && check_import indicf5 "import transformers, soundfile; from f5_tts.infer.utils_infer import load_vocoder"
 
 fetch() {  # repo_id local_dir [allow_patterns...]
     "$ROOT/.venv-platform/bin/python" - "$@" <<'PY'
@@ -104,6 +104,16 @@ PY
 }
 
 # ---- Wan2.2 (character replacement) ------------------------------------------------
+wan_extras() {  # python repo — animate/s2v requirements; uv rejects "-e git+…" (SAM2), so install those non-editable
+    local py="$1" repo="$2" extra
+    for extra in "$repo"/requirements_animate.txt "$repo"/requirements_s2v.txt; do
+        [[ -f "$extra" ]] || continue
+        sed -E 's/^[[:space:]]*-e[[:space:]]+//' "$extra" > "$RT/venvs/wan/$(basename "$extra")"
+        uv pip install --python "$py" --no-build-isolation -r "$RT/venvs/wan/$(basename "$extra")" \
+            || echo "!! $(basename "$extra") did not install completely"
+    done
+}
+
 if want wan; then
     REPO="$RT/repos/Wan2.2"
     if [[ ! -f "$RT/venvs/wan/.vp_ok" ]]; then
@@ -115,9 +125,7 @@ if want wan; then
             uv pip install --python "$PY" torch torchvision packaging ninja psutil wheel setuptools
             grep -v -i '^flash_attn' "$REPO/requirements.txt" > "$RT/venvs/wan/req.txt"
             uv pip install --python "$PY" -r "$RT/venvs/wan/req.txt"
-            for extra in "$REPO"/requirements_animate.txt "$REPO"/requirements_s2v.txt; do
-                [[ -f "$extra" ]] && uv pip install --python "$PY" -r "$extra"
-            done
+            wan_extras "$PY" "$REPO"
             uv pip install --python "$PY" --no-build-isolation flash_attn || echo "flash_attn unavailable (slower attention)"
             uv pip install --python "$PY" sageattention safetensors || echo "sageattention unavailable (balanced profile uses default attention)"
             fetch Wan-AI/Wan2.2-Animate-14B "$RT/weights/Wan2.2-Animate-14B"
@@ -179,6 +187,35 @@ if want image; then
     ESR="$RT/weights/RealESRGAN_x2plus.pth"
     [[ -s "$ESR" ]] || curl -fsSL -o "$ESR" https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth \
         || say "WARNING: Real-ESRGAN weights not downloaded (upscaling falls back to Lanczos)"
+fi
+
+# ---- GPU check: every model environment must run CUDA kernels on THIS GPU -----------------
+# (packages that pin an old torch — chatterbox: 2.6, LatentSync: 2.5.1+cu121 — have no Blackwell
+#  sm_120 kernels: "no kernel image is available for execution on the device")
+GPU_TEST='import torch; assert torch.cuda.is_available(); d="cuda"; torch.nn.LSTM(4, 4).to(d)(torch.randn(1, 1, 4, device=d)); torch.nn.functional.conv2d(torch.randn(1, 1, 4, 4, device=d), torch.randn(1, 1, 3, 3, device=d)); torch.cuda.synchronize()'
+gpu_fix() {  # name — upgrade only the torch family of a venv whose torch cannot run on this GPU
+    local name="$1" py="$RT/venvs/$1/bin/python" pkgs=()
+    [[ -x "$py" && -f "$RT/venvs/$name/.vp_ok" ]] || return 0
+    command -v nvidia-smi >/dev/null || return 0
+    "$py" -c "$GPU_TEST" >>"$LOGS/setup_$name.log" 2>&1 && return 0
+    say "$name: torch cannot run on this GPU; installing torch 2.8 (CUDA 12.8) (log: $LOGS/setup_$name.log)"
+    pkgs=("torch==2.8.0")
+    "$py" -c "import torchvision" 2>/dev/null && pkgs+=("torchvision==0.23.0")
+    "$py" -c "import torchaudio" 2>/dev/null && pkgs+=("torchaudio==2.8.0")
+    uv pip install --python "$py" "${pkgs[@]}" >>"$LOGS/setup_$name.log" 2>&1
+    "$py" -c "$GPU_TEST" >>"$LOGS/setup_$name.log" 2>&1 || { rm -f "$RT/venvs/$name/.vp_ok"; say "$name: GPU check still fails"; fail "$name"; }
+}
+for env in tts indicf5 parler latentsync wan image audio diar asd sep llm diarizen; do
+    want "$env" && gpu_fix "$env"
+done
+if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing has its own requirements
+    WAN_PRE='import sys; sys.path.insert(0, "wan/modules/animate/preprocess"); import process_pipepline'
+    if ! (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") >>"$LOGS/setup_wan.log" 2>&1; then
+        say "wan: installing animation preprocessing requirements (log: $LOGS/setup_wan.log)"
+        wan_extras "$RT/venvs/wan/bin/python" "$RT/repos/Wan2.2" >>"$LOGS/setup_wan.log" 2>&1
+        (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") >>"$LOGS/setup_wan.log" 2>&1 \
+            || { rm -f "$RT/venvs/wan/.vp_ok"; say "wan: animation preprocessing still cannot be imported"; fail wan; }
+    fi
 fi
 
 OPTIONAL=" asd sep indicf5 diarizen "   # upgrades with automatic fallbacks; never block the run

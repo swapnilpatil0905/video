@@ -1,2 +1,4 @@
 git+https://github.com/ai4bharat/IndicF5.git
 soundfile>=0.12
+# pyarrow >= 18 needs NumPy 2, but IndicF5 / f5-tts stay on NumPy 1.x
+pyarrow<18
