@@ -220,6 +220,21 @@ if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing 
     if ! (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") >>"$LOGS/setup_wan.log" 2>&1; then
         say "wan: installing animation preprocessing requirements (log: $LOGS/setup_wan.log)"
         wan_extras "$RT/venvs/wan/bin/python" "$RT/repos/Wan2.2" >>"$LOGS/setup_wan.log" 2>&1
+        # the preprocessing code imports packages its requirements file does not list (e.g. moviepy):
+        # install whatever the import reports missing, a few rounds at most
+        for round in 1 2 3 4 5 6 7 8 9 10; do
+            missing=$( (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") 2>&1 \
+                       | sed -nE "s/.*No module named '([A-Za-z0-9_]+).*/\1/p" | tail -n 1)
+            [[ -z "$missing" ]] && break
+            case "$missing" in
+                cv2) pkg=opencv-python ;; PIL) pkg=pillow ;; sklearn) pkg=scikit-learn ;; yaml) pkg=pyyaml ;;
+                skimage) pkg=scikit-image ;; sam2) pkg="git+https://github.com/facebookresearch/sam2.git" ;;
+                *) pkg="$missing" ;;
+            esac
+            echo "wan preprocessing: installing missing module $missing ($pkg)" >>"$LOGS/setup_wan.log"
+            SAM2_BUILD_CUDA=0 uv pip install --python "$RT/venvs/wan/bin/python" --no-build-isolation "$pkg" \
+                >>"$LOGS/setup_wan.log" 2>&1 || break
+        done
         (cd "$RT/repos/Wan2.2" && "$RT/venvs/wan/bin/python" -c "$WAN_PRE") >>"$LOGS/setup_wan.log" 2>&1 \
             || { rm -f "$RT/venvs/wan/.vp_ok"; say "wan: animation preprocessing still cannot be imported"; fail wan; }
     fi
