@@ -96,5 +96,35 @@ def main() -> None:
         print(f"{spk}: {dict(c.most_common(6))} (seconds)")
 
 
+def identity_inputs(project: Path) -> None:
+    """What the active-speaker worker was actually asked to recognise, vs. the face clusters."""
+    import numpy as np
+
+    ctx = _platform(project)
+    expected = ctx.planner.expected_ids()
+    work = project / "state" / "work" / "active_speaker" / expected["active_speaker"]
+    print(f"\n== active-speaker inputs ({work})")
+    for req in sorted(work.glob("*.request.json")):
+        body = json.loads(req.read_text(encoding="utf-8"))
+        cents = body.get("centroids") or {}
+        print(f"{req.name}: {len(cents)} identities; first: {list(cents)[:8]}; "
+              f"has 0003/0001/0004: {[c in cents for c in ('SRC_CHAR_0003', 'SRC_CHAR_0001', 'SRC_CHAR_0004')]}")
+        if cents and "SRC_CHAR_0003" in cents and "SRC_CHAR_0004" in cents:
+            a, b = np.array(cents["SRC_CHAR_0003"]), np.array(cents["SRC_CHAR_0004"])
+            print(f"  cos(0003, 0004) = {float(a @ b):.3f}")
+    for stage in ("face_embedding", "face_clustering", "face_detection"):
+        record = ctx.index.find_valid(expected[stage])
+        print(f"[{stage}] {expected[stage]}: outputs {[r.uri.rsplit('/', 1)[-1] for r in record.outputs if r.uri]}"
+              if record else f"[{stage}] NOT BUILT")
+    record = ctx.index.find_valid(expected["face_embedding"])
+    if record:
+        ref = next(r for r in record.outputs if r.uri and r.uri.endswith(".npz"))
+        data = np.load(ctx.store.materialize(ctx.store.key_from_uri(ref.uri), project / "state" / "cache"))
+        ids = data["face_ids"]
+        print(f"embeddings: {len(ids)} rows, {len(set(ids.tolist()))} distinct ids, first {ids[:3].tolist()}, "
+              f"last {ids[-3:].tolist()}")
+
+
 if __name__ == "__main__":
     main()
+    identity_inputs(Path(sys.argv[1] if len(sys.argv) > 1 else "/workspace/video/projects/project_001"))
