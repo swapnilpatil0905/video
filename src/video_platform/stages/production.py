@@ -850,6 +850,16 @@ class Producer:
         outs = {j.clip.clip_id: j.workdir / f"wan_{attempt}.mp4" for j in jobs}
         for j in jobs:
             j.last_out = None
+        finished = [j for j in jobs if outs[j.clip.clip_id].exists()
+                    and outs[j.clip.clip_id].with_name(outs[j.clip.clip_id].name + ".done").exists()]
+        for j in finished:  # rendered by an earlier run that stopped before the stage finished
+            j.last_out = outs[j.clip.clip_id]
+            j.attempts.append({"seed": seed, "mode": "recovered", "ok": True})
+        if finished:
+            log.info("Wan: %d clip(s) already rendered by an earlier run, reused", len(finished))
+            jobs = [j for j in jobs if j not in finished]
+            if not jobs:
+                return
         rt = self.s.runtime
         attempted: set[str] = set()
         if not self.persistent_failed:
