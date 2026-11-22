@@ -104,14 +104,21 @@ PY
 }
 
 # ---- Wan2.2 (character replacement) ------------------------------------------------
-wan_extras() {  # python repo — animate/s2v requirements; uv rejects "-e git+…" (SAM2), so install those non-editable
-    local py="$1" repo="$2" extra
+wan_extras() {  # python repo — animate/s2v requirements, one package at a time so one failure cannot block the rest
+    # uv rejects "-e git+…" (SAM2): install those non-editable. SAM2's CUDA extension (mask hole-filling only)
+    # does not compile against new torch headers: skip it. flash_attn is optional and handled separately.
+    local py="$1" repo="$2" extra line failed=()
     for extra in "$repo"/requirements_animate.txt "$repo"/requirements_s2v.txt; do
         [[ -f "$extra" ]] || continue
-        sed -E 's/^[[:space:]]*-e[[:space:]]+//' "$extra" > "$RT/venvs/wan/$(basename "$extra")"
-        uv pip install --python "$py" --no-build-isolation -r "$RT/venvs/wan/$(basename "$extra")" \
-            || echo "!! $(basename "$extra") did not install completely"
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line="${line%%#egg=*}"; line="$(sed -E 's/^[[:space:]]*-e[[:space:]]+//; s/[[:space:]]+#.*$//' <<<"$line")"
+            [[ -z "${line// }" || "$line" == \#* || "$line" =~ ^(flash[-_]attn|-r|--) ]] && continue
+            SAM2_BUILD_CUDA=0 SAM2_BUILD_ALLOW_ERRORS=1 uv pip install --python "$py" --no-build-isolation "$line" \
+                || failed+=("$line")
+        done < "$extra"
     done
+    if [[ ${#failed[@]} -gt 0 ]]; then echo "!! not installed: ${failed[*]}"; fi
+    return 0
 }
 
 if want wan; then
