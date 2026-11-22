@@ -769,7 +769,7 @@ class Producer:
                 "out": [self.work_w, self.work_h, self.fps],
             }
             item = self.s.item("video", payload, f"clip:{clip.clip_id}")
-            if item.done:
+            if item.done and item.data.get("status") != "fallback_source":  # a failed generation is retried
                 done[clip.clip_id] = (item.output("clip.mp4"), item.data)
             else:
                 jobs.append(VideoJob(clip, item, strategy, gid, ref, ref_path, item.path("x").parent))
@@ -1081,6 +1081,9 @@ class Producer:
         log.info("%s: %d clips, %.1fs, %d lines", self.scope, len(clips), total, len(placed))
 
         fitted = self.fit_lines(placed, self.synthesize(placed))
+        if placed and not any(ln.get("placed") for ln in fitted):  # never hand a silent cut over for approval
+            raise StageFailure(f"no dialogue was produced: text-to-speech failed for all {len(placed)} lines "
+                               f"(see {self.s.runtime.log_dir}/worker_tts_lines_*.log)")
         started = time.time()
         stem = self.build_stem(fitted, total)
         bed = self.build_bed(clips)
@@ -1091,6 +1094,10 @@ class Producer:
         log.info("video: %d clips cached, %d to produce (%d character replacements)", len(done), len(jobs),
                  sum(j.strategy == "animate_replace" for j in jobs))
         videos = {**done, **self.produce_videos(jobs)}
+        replaced = [v[1] for v in videos.values() if v[1].get("strategy") == "animate_replace"]
+        if replaced and all(d.get("status") == "fallback_source" for d in replaced):
+            raise StageFailure(f"no character was generated: all {len(replaced)} animated clips fell back to the "
+                               f"source footage (see {self.s.runtime.log_dir}/wan_preprocess_*.log, wan_generate_*.log)")
         speech_clips = {ln["clip_id"] for ln in fitted if ln.get("placed")}
         synced = self.lipsync_all(clips, videos, stem, speech_clips)
         finals = self.finalize_all(clips, videos, synced)
