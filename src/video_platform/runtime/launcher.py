@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -72,7 +73,18 @@ def gpu_summary() -> str:
 GPU_HEAVY_RUNTIMES = {"llm", "image", "wan", "latentsync", "parler", "tts", "indicf5"}
 
 
-def gpu_busy_processes(min_mib: int = 2048) -> str:
+_OWN_PIDS: set[int] = set()  # model processes started by this run (parallel jobs are not "leftovers")
+_OWN_LOCK = threading.Lock()
+
+
+def _own_pids() -> set[int]:
+    with _OWN_LOCK:
+        live = {p for p in _OWN_PIDS if os.path.exists(f"/proc/{p}")}
+        _OWN_PIDS.intersection_update(live)
+        return set(live)
+
+
+def gpu_busy_processes(min_mib: int = 2048, exclude: set[int] | None = None) -> str:
     """Processes holding GPU memory (pid, MiB, name), '' if none / no nvidia-smi."""
     try:
         out = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,used_memory,process_name",
@@ -82,9 +94,25 @@ def gpu_busy_processes(min_mib: int = 2048) -> str:
     rows = []
     for line in out.splitlines():
         parts = [x.strip() for x in line.split(",")]
-        if len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) >= min_mib:
+        if (len(parts) >= 2 and parts[1].isdigit() and int(parts[1]) >= min_mib
+                and not (parts[0].isdigit() and _related(int(parts[0]), exclude or set()))):
             rows.append(f"pid {parts[0]} {int(parts[1]) / 1024:.0f} GB {parts[2] if len(parts) > 2 else ''}")
     return "; ".join(rows)
+
+
+def _related(pid: int, ours: set[int]) -> bool:
+    """True if pid is one of our model processes or a child of one (e.g. a model engine subprocess)."""
+    for _ in range(8):
+        if pid in ours:
+            return True
+        try:
+            with open(f"/proc/{pid}/stat") as fh:
+                pid = int(fh.read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            return False
+        if pid <= 1:
+            return False
+    return False
 
 
 def _fmt_elapsed(seconds: float) -> str:
@@ -192,7 +220,7 @@ class RuntimeRunner:
         log.info("run [%s] %s (log: %s)", runtime, " ".join(argv[:4]) + (" …" if len(argv) > 4 else ""), log_path)
         heartbeat = float(getattr(self.spec, "heartbeat_seconds", 60) or 0)
         if runtime in GPU_HEAVY_RUNTIMES:
-            busy = gpu_busy_processes()
+            busy = gpu_busy_processes(exclude=_own_pids())
             if busy:
                 log.warning("GPU memory already in use before %s: %s — leftover model processes? "
                             "Stop them with: bash start.sh stop", log_name, busy)
@@ -201,6 +229,8 @@ class RuntimeRunner:
             handle.flush()
             proc = subprocess.Popen(argv, cwd=cwd, env={**self.env(runtime), **(env_extra or {})}, stdout=handle,
                                     stderr=subprocess.STDOUT)
+            with _OWN_LOCK:
+                _OWN_PIDS.add(proc.pid)
             while True:
                 try:
                     proc.wait(timeout=heartbeat if heartbeat > 0 else None)
