@@ -65,3 +65,22 @@ def test_unknown_gpu_runs_gpu_stages_one_at_a_time(make_project):
     SPANS.clear()
     Runner(ctx, SimpleNamespace(gpu_memory_gb=0.0), max_parallel=3).run(None)
     assert not _overlap("t_gpu_a", "t_gpu_b")
+
+
+def test_before_stage_error_is_reported_at_once_and_running_stages_still_finish(make_project, caplog):
+    import pytest
+
+    from video_platform.core.errors import IllegalStateError
+
+    ctx = _ctx(make_project())
+    SPANS.clear()
+
+    def before(spec, _artifact_id):
+        if spec.name == "t_cpu":
+            raise IllegalStateError("illegal transition ANALYZING → SAMPLE_GENERATING")
+
+    with caplog.at_level("ERROR"), pytest.raises(IllegalStateError):
+        Runner(ctx, SimpleNamespace(gpu_memory_gb=96.0), max_parallel=3, before_stage=before).run(None)
+    assert any("cannot start stage t_cpu" in r.getMessage() for r in caplog.records)
+    assert "t_llm" not in SPANS                                   # nothing new starts after the error
+    assert ctx.index.find_valid(ctx.planner.expected_ids()["t_root"]) is not None

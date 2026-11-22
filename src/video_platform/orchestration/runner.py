@@ -244,7 +244,14 @@ class Runner:
                         if not self._can_start(spec, {f: s for f, s in running.items()}, gpu_gb):
                             continue
                         if self.before_stage:
-                            self.before_stage(spec, item.artifact_id)
+                            try:
+                                self.before_stage(spec, item.artifact_id)
+                            except BaseException as exc:  # noqa: BLE001 - report now, not after the running stages
+                                errors.append(exc)
+                                log.error("✘ cannot start stage %s: %s%s", spec.name, str(exc)[:500],
+                                          f" — no new stages start; waiting for {', '.join(s.name for s in running.values())}"
+                                          if running else "")
+                                break
                         pending.remove(item)
                         running[pool.submit(self._execute, item)] = spec
                 if not running:
