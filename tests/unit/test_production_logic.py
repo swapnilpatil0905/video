@@ -127,6 +127,13 @@ def test_approval_state_machine(tmp_path):
     assert store.state(pid) == "PRODUCTION_COMPLETED"
 
 
+def test_analysis_flows_straight_into_sample_in_one_run(tmp_path):
+    store = ApprovalStore(tmp_path / "a.sqlite")
+    for state in ("ANALYZING", "SAMPLE_GENERATING", "SAMPLE_COMPLETED", "APPROVAL_PENDING"):
+        store.transition("p", state, actor="t")
+    assert store.state("p") == "APPROVAL_PENDING"
+
+
 def test_stopped_project_cannot_produce(tmp_path):
     store = ApprovalStore(tmp_path / "a.sqlite")
     for state in ("SAMPLE_GENERATING", "SAMPLE_COMPLETED", "APPROVAL_PENDING"):
