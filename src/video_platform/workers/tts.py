@@ -14,6 +14,10 @@ def run(request: dict) -> dict:
     import torch
     from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
+    import perth
+
+    if perth.PerthImplicitWatermarker is None:  # its import failed silently; surface the real reason
+        from perth.perth_net.perth_net_implicit.perth_watermarker import PerthImplicitWatermarker  # noqa: F401
     dev = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
     model = ChatterboxMultilingualTTS.from_pretrained(device=dev)
     out, errors = {}, {}

@@ -1,2 +1,4 @@
 chatterbox-tts>=0.1.4
 soundfile>=0.12
+# Chatterbox's audio watermark (resemble-perth) imports pkg_resources, removed in setuptools 81
+setuptools<81

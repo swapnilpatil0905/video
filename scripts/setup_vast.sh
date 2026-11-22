@@ -92,6 +92,7 @@ check_import() {  # name python-code — verify an optional runtime actually wor
     fi
 }
 want sep     && check_import sep "import audio_separator"
+want tts     && check_import tts "import perth; assert perth.PerthImplicitWatermarker is not None, 'resemble-perth watermarker failed to import'"
 want indicf5 && check_import indicf5 "import transformers, soundfile; from f5_tts.infer.utils_infer import load_vocoder"
 
 fetch() {  # repo_id local_dir [allow_patterns...]
