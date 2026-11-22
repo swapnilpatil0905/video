@@ -1,7 +1,7 @@
 """Read-only report: how diarized speakers map to characters, and how much speech per character is visible
-in the per-line active-speaker results. Uses only the Python standard library; writes nothing.
+in the per-line active-speaker results. Reads the artifacts the pipeline itself would use; writes nothing.
 
-    python3 scripts/diagnose_speakers.py /workspace/video/projects/project_001
+    /workspace/video/.venv-platform/bin/python scripts/diagnose_speakers.py /workspace/video/projects/project_001
 """
 
 from __future__ import annotations
@@ -12,11 +12,37 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
+_CTX = None
+
+
+def _platform(project: Path):
+    """The pipeline's own context, so we read exactly the artifacts the next run will use."""
+    global _CTX
+    if _CTX is None:
+        import argparse
+
+        from video_platform.cli import build_context
+
+        _CTX = build_context(argparse.Namespace(project=str(project / "config.yaml"), overrides=[], email=None))
+    return _CTX
+
+
 def latest(project: Path, stage: str, name: str):
-    files = sorted((project / "artifacts" / stage).glob(f"*/{name}"), key=lambda p: p.stat().st_mtime)
-    if not files:
-        sys.exit(f"missing {stage}/{name} under {project / 'artifacts'}")
-    return json.loads(files[-1].read_text(encoding="utf-8"))
+    try:
+        ctx = _platform(project)
+    except Exception as exc:  # noqa: BLE001 - plain python3 without the platform installed
+        sys.exit(f"run this with the platform python (/workspace/video/.venv-platform/bin/python): {exc}")
+    artifact_id = ctx.planner.expected_ids()[stage]
+    record = ctx.index.find_valid(artifact_id)
+    dirs = sorted(p.name for p in (project / "artifacts" / stage).glob("art_*"))
+    print(f"[{stage}] using {artifact_id} ({'valid' if record else 'NOT BUILT'}); "
+          f"{len(dirs)} folder(s) on disk{': ' + ', '.join(d[:12] for d in dirs) if len(dirs) > 1 else ''}")
+    if record is None:
+        return None
+    ref = next((r for r in record.outputs if r.uri and r.uri.endswith("/" + name)), None)
+    if ref is None:
+        sys.exit(f"{stage}: no {name} in {artifact_id}")
+    return json.loads(ctx.store.read_bytes(ctx.store.key_from_uri(ref.uri)))
 
 
 def main() -> None:
@@ -24,8 +50,10 @@ def main() -> None:
     segments = latest(project, "alignment", "audio_segments.json")
     asd = latest(project, "active_speaker", "active_speaker.json")
     mapping = latest(project, "speaker_mapping", "speaker_mapping.json")
-    profiles = {c["character_id"]: c for c in latest(project, "character_profile", "character_profiles.json")} \
-        if list((project / "artifacts" / "character_profile").glob("*/character_profiles.json")) else {}
+    profiles = {c["character_id"]: c for c in latest(project, "character_profile", "character_profiles.json") or []}
+    database = {c["character_id"]: c for c in latest(project, "character_database", "source_characters.json") or []}
+    if segments is None or asd is None or mapping is None:
+        sys.exit("an analysis stage is not built for the current settings")
 
     dur = {s["segment_id"]: s["end_s"] - s["start_s"] for s in segments}
     print(f"segments: {len(segments)}, speech {sum(dur.values()) / 60:.1f} min, "
@@ -53,10 +81,10 @@ def main() -> None:
         if who:
             asd_any[who] += dur[s["segment_id"]]
     ids = sorted(set(via_map) | set(via_asd) | set(profiles), key=lambda c: -(profiles.get(c, {}).get("score") or 0))
-    print(f"{'character':14} {'tier':20} {'faces':>6} {'map s':>7} {'asd clear s':>11} {'asd any s':>9}")
+    print(f"{'character':14} {'tier':20} {'db faces':>8} {'faces':>6} {'map s':>7} {'asd clear s':>11} {'asd any s':>9}")
     for cid in ids:
         p = profiles.get(cid, {})
-        print(f"{cid:14} {str(p.get('tier')):20} {p.get('face_count', ''):>6} {via_map[cid]:7.0f} {via_asd[cid]:11.0f} {asd_any[cid]:9.0f}")
+        print(f"{cid:14} {str(p.get('tier')):20} {database.get(cid, {}).get('face_count', ''):>8} {p.get('face_count', ''):>6} {via_map[cid]:7.0f} {via_asd[cid]:11.0f} {asd_any[cid]:9.0f}")
 
     print("\n== top speakers: which characters the active-speaker check sees in their lines")
     by_spk = defaultdict(Counter)
