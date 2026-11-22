@@ -894,6 +894,10 @@ class Producer:
             results = {k: v for r in responses for k, v in r.get("results", {}).items()}
             for j in jobs:
                 r = results.get(j.clip.clip_id)
+                marker = outs[j.clip.clip_id].with_name(outs[j.clip.clip_id].name + ".done")
+                if r is None and marker.exists() and outs[j.clip.clip_id].exists():
+                    # the worker died later, but this clip was fully written before that
+                    r = {"ok": True, "seconds": float(marker.read_text() or 0), "recovered": True}
                 if r is None:
                     continue
                 attempted.add(j.clip.clip_id)

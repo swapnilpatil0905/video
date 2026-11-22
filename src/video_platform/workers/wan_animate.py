@@ -164,7 +164,11 @@ def run(request: dict) -> dict:
             save(**_accepts(save, {"tensor": video[None], "save_file": job["out"],
                                    "fps": getattr(cfg, "sample_fps", 30), "nrow": 1, "normalize": True,
                                    "value_range": (-1, 1)}))
-            results[job["id"]] = {"ok": os.path.exists(job["out"]), "seconds": round(time.time() - t0, 2)}
+            ok = os.path.exists(job["out"])
+            if ok:  # survives a crash of this process: the stage keeps clips that carry this marker
+                with open(job["out"] + ".done", "w") as marker:
+                    marker.write(str(round(time.time() - t0, 2)))
+            results[job["id"]] = {"ok": ok, "seconds": round(time.time() - t0, 2)}
         except Exception as exc:
             results[job["id"]] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:1500],
                                   "seconds": round(time.time() - t0, 2)}
