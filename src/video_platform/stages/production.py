@@ -1124,8 +1124,14 @@ class Producer:
         s.put_file(final, f"{self.prefix}{name}.mp4")
         s.put_file(srt, f"{self.prefix}{name}.srt")
         if self.sample and s.config.sample.generate_subtitles:
-            s.put_file(media.burn_subtitles(final, srt, s.workdir / f"{tag}_with_subtitles.mp4"),
-                       f"{self.prefix}trailer_with_subtitles.mp4")
+            if not srt.read_text(encoding="utf-8").strip():
+                s.warn("no spoken lines were placed, so there are no subtitles to burn in")
+            else:
+                try:  # a burned-in copy is a convenience; never lose the trailer over it
+                    s.put_file(media.burn_subtitles(final, srt, s.workdir / f"{tag}_with_subtitles.mp4"),
+                               f"{self.prefix}trailer_with_subtitles.mp4")
+                except Exception as exc:  # noqa: BLE001
+                    s.warn(f"could not burn in subtitles: {str(exc)[:300]}")
         s.put_file(media.still(final, total / 3, s.workdir / f"{tag}_thumbnail.jpg", width=640), f"{self.prefix}thumbnail.jpg")
         self.timed("assembly", started)
         for t in timeline:
