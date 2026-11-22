@@ -14,7 +14,7 @@ export HF_HOME="${VP_HF_HOME:-$RT/hf}"
 export UV_INDEX_URL="https://pypi.org/simple" UV_DEFAULT_INDEX="https://pypi.org/simple"
 export PIP_INDEX_URL="https://pypi.org/simple" UV_PYTHON_PREFERENCE="managed" UV_LINK_MODE="copy"
 unset PIP_EXTRA_INDEX_URL UV_EXTRA_INDEX_URL || true
-[[ -f "$ROOT/.env" ]] && { set -a; source "$ROOT/.env"; set +a; }
+source "$ROOT/scripts/load_env.sh"; [[ -f "$ROOT/.env" ]] && load_env "$ROOT/.env"
 if [[ -z "${HF_TOKEN:-}" ]]; then
     echo "WARNING: HF_TOKEN not set (create .env first): Hugging Face downloads will be rate-limited and slow"
 fi

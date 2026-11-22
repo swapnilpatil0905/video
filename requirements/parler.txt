@@ -1,4 +1,5 @@
 git+https://github.com/huggingface/parler-tts.git
 soundfile>=0.12
-# sentencepiece's generated model_pb2 needs google.protobuf.runtime_version (protobuf >= 5.26)
-protobuf>=5.26.1
+# sentencepiece 0.2.1's generated model_pb2 imports google.protobuf.runtime_version (protobuf >= 5.26), but
+# parler-tts's audio codec (descript-audiotools) pins protobuf < 3.20 — keep the older sentencepiece instead
+sentencepiece==0.2.0

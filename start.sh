@@ -15,24 +15,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 chmod +x run.sh run.py scripts/*.sh 2>/dev/null || true
-load_env() {  # KEY=VALUE lines only (quotes optional); a bad line is reported and skipped, never executed
-    local line key value n=0
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        n=$((n + 1))
-        line="${line%$'\r'}"
-        [[ -z "${line// }" || "$line" =~ ^[[:space:]]*# ]] && continue
-        if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
-            key="${BASH_REMATCH[2]}"; value="${BASH_REMATCH[3]}"
-            if [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]]; then value="${BASH_REMATCH[1]}"; fi
-            if [[ "$value" == *"<"*">"* ]]; then
-                echo "== .env line $n: $key still has a <placeholder>; ignored" >&2; continue
-            fi
-            export "$key=$value"
-        else
-            echo "== .env line $n is not KEY=VALUE; ignored" >&2
-        fi
-    done < .env
-}
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/load_env.sh"
 [[ -f .env ]] && load_env
 export VP_RUNTIME_ROOT="${VP_RUNTIME_ROOT:-/workspace/vp}"
 # one model cache for setup, prefetch and every stage. Cloud templates often preset HF_HOME
