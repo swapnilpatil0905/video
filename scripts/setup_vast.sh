@@ -71,6 +71,10 @@ mkvenv() {  # name dir requirements-file [extra uv pip args...]
     } >"$LOGS/setup_$name.log" 2>&1 && touch "$dir/.vp_ok" || fail "$name"
 }
 
+recipe_ok() {  # venv-dir recipe — installed with this recipe (an empty marker from older setups counts as current)
+    [[ -f "$1/.vp_ok" ]] && { [[ ! -s "$1/.vp_ok" ]] || [[ "$(cat "$1/.vp_ok")" == "$2" ]]; }
+}
+
 if want core; then
     mkvenv core "$ROOT/.venv-platform" "$ROOT/requirements/core.txt" -e "$ROOT[dev]"
 fi
@@ -198,7 +202,8 @@ fi
 # ---- DiariZen (speaker diarization) -------------------------------------------------------
 if want diarizen; then
     REPO="$RT/repos/DiariZen"
-    if [[ ! -f "$RT/venvs/diarizen/.vp_ok" || "$0" -nt "$RT/venvs/diarizen/.vp_ok" ]]; then
+    DIARIZEN_RECIPE="torch<2.9 v1"  # change this to force a rebuild
+    if ! recipe_ok "$RT/venvs/diarizen" "$DIARIZEN_RECIPE"; then
         say "diarizen: repository + environment (log: $LOGS/setup_diarizen.log)"
         {
             [[ -d "$REPO/.git" ]] || git clone --recursive --depth 1 https://github.com/BUTSpeechFIT/DiariZen.git "$REPO"
@@ -211,7 +216,7 @@ if want diarizen; then
             uv pip install --python "$PY" -c "$PIN" -e "$REPO"
             [[ -d "$REPO/pyannote-audio" ]] && uv pip install --python "$PY" -c "$PIN" -e "$REPO/pyannote-audio"
             "$PY" -c "from diarizen.pipelines.inference import DiariZenPipeline; print('diarizen import ok')"
-        } >"$LOGS/setup_diarizen.log" 2>&1 && touch "$RT/venvs/diarizen/.vp_ok" || fail diarizen
+        } >"$LOGS/setup_diarizen.log" 2>&1 && echo "$DIARIZEN_RECIPE" >"$RT/venvs/diarizen/.vp_ok" || fail diarizen
     else say "diarizen: ready"; fi
 fi
 
@@ -237,7 +242,8 @@ MSST_RELEASE=https://github.com/ZFTurbo/Music-Source-Separation-Training/release
 MSST_TEST='import sys, torch, argparse; sys.path.insert(0, "."); from utils.settings import get_model_from_config; from utils.model_utils import load_start_checkpoint; m, c = get_model_from_config("bandit", sys.argv[1]); a = argparse.Namespace(start_check_point=sys.argv[2], model_type="bandit", lora_checkpoint_peft="", lora_checkpoint_loralib="", lora_checkpoint=""); load_start_checkpoint(a, m, torch.load(sys.argv[2], map_location="cpu", weights_only=False), type_="inference"); m.to("cuda").eval(); print("BandIt instruments:", list(c.training.instruments))'
 if want msst; then
     REPO="$RT/repos/Music-Source-Separation-Training"; W="$RT/weights/msst"; PY="$RT/venvs/msst/bin/python"
-    if [[ ! -f "$RT/venvs/msst/.vp_ok" || "$0" -nt "$RT/venvs/msst/.vp_ok" ]]; then
+    MSST_RECIPE="$MSST_COMMIT v1"  # change this to force a rebuild
+    if [[ ! -s "$RT/venvs/msst/.vp_ok" || "$(cat "$RT/venvs/msst/.vp_ok")" != "$MSST_RECIPE" ]]; then
         say "msst: BandIt Plus music/effects separation (log: $LOGS/setup_msst.log)"
         {
             [[ -d "$REPO/.git" ]] || git clone https://github.com/ZFTurbo/Music-Source-Separation-Training.git "$REPO"
@@ -264,7 +270,7 @@ if want msst; then
                 uv pip install --python "$PY" -c "$PIN" "$pkg" || break
             done
             (cd "$REPO" && "$PY" -c "$MSST_TEST" "$W/config_dnr_bandit_bsrnn_multi_mus64.yaml" "$W/model_bandit_plus_dnr_sdr_11.47.chpt")
-        } >"$LOGS/setup_msst.log" 2>&1 && touch "$RT/venvs/msst/.vp_ok" || fail msst
+        } >"$LOGS/setup_msst.log" 2>&1 && echo "$MSST_RECIPE" >"$RT/venvs/msst/.vp_ok" || fail msst
     else say "msst: ready"; fi
 fi
 
