@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +28,7 @@ from ..core.log import get_logger
 from ..config.schema import parse_resolution
 from ..orchestration.runner import StageContext, executor
 from ..runtime.launcher import fill_template
+from ..storytelling.gender import norm_gender
 from . import media
 from .assets import identity_embeddings
 
@@ -379,6 +381,10 @@ class Producer:
         self.export_dir = s.loaded.project_dir / ("sample" if self.sample else "output")
         self.asd = s.dep_json("active_speaker", "active_speaker.json")
         self.presence: dict[str, str] = {}
+        identity = s.dep_json("character_identity", "character_identity.json", required=False) or {}
+        self.char_gender = {c["character_id"]: norm_gender(c.get("gender")) for c in identity.get("characters", [])}
+        self.face_gender: dict[str, str | None] = {}   # clip → gender of its main on-screen face (majority of 3 frames)
+        self.gender_blocked: dict[str, list[str]] = {}  # clip → characters not placed on a face of the other gender
         self.tts_engine: str | None = None
 
         par = self.prod.parallel
@@ -714,12 +720,48 @@ class Producer:
                 visible.add(spk)
         if clip.clip_id in self.presence:
             visible.add(self.presence[clip.clip_id])
+        face = self.face_gender.get(clip.clip_id)
+
+        def fits(char: str) -> bool:  # never put a character onto a face of the other gender
+            want = self.char_gender.get(char)
+            if face and want and want != face:
+                self.gender_blocked.setdefault(clip.clip_id, [])
+                if char not in self.gender_blocked[clip.clip_id]:
+                    self.gender_blocked[clip.clip_id].append(char)
+                return False
+            return True
+
         speaking = [ln.get("character_id") for ln in clip_lines if ln.get("character_id")]
         for char in speaking:
-            if char in visible and char in self.ref_by_source:
+            if char in visible and char in self.ref_by_source and fits(char):
                 return self.ref_by_source[char]
-        ranked = sorted((c for c in visible if c in self.ref_by_source), key=lambda c: self.tier_rank.get(c, 99))
+        ranked = sorted((c for c in visible if c in self.ref_by_source and fits(c)), key=lambda c: self.tier_rank.get(c, 99))
         return self.ref_by_source[ranked[0]] if ranked else None
+
+    def detect_face_genders(self, clips: list[Clip]) -> None:
+        """Gender of each clip's main face (the one the animation replaces): InsightFace on 3 frames, majority vote.
+        Unknown when the frames disagree or show no face; the gate then does not apply."""
+        started = time.time()
+        folder = self.s.workdir / "face_gender"
+        folder.mkdir(parents=True, exist_ok=True)
+        points = [(c, k) for c in clips for k in (0.25, 0.5, 0.75)]
+
+        def frame(point: tuple[Clip, float]) -> Path:
+            clip, k = point
+            t = clip.src_start + k * (clip.src_end - clip.src_start)
+            return media.still(self.source, t, folder / f"{clip.clip_id}_{int(k * 100)}.jpg")
+
+        paths = media.pmap(frame, points, self.cpu_workers)
+        found = identity_embeddings(self.s, {f"{c.clip_id}|{k}": p for (c, k), p in zip(points, paths)}, full=True)
+        for clip in clips:
+            votes = Counter(norm_gender((found.get(f"{clip.clip_id}|{k}") or {}).get("gender")) for k in (0.25, 0.5, 0.75))
+            votes.pop(None, None)
+            best = votes.most_common(1)
+            self.face_gender[clip.clip_id] = best[0][0] if best and best[0][1] >= 2 else None
+        known = sum(v is not None for v in self.face_gender.values())
+        self.notes.append(f"face gender known for {known}/{len(clips)} clips (characters are only placed on a face "
+                          "of the same gender)")
+        self.timed("face_gender", started)
 
     def detect_presence(self, clips: list[Clip], placed: list[dict]) -> None:
         """Gap fix: the legacy analysis saw one frame per shot, so characters can be missed. Check each clip's own
@@ -1107,7 +1149,12 @@ class Producer:
         self.timed("audio_beds", started)
 
         self.detect_presence(clips, placed)
+        if self.vspec.enabled and self.char_gender:
+            self.detect_face_genders(clips)
         done, jobs = self.plan_videos(clips, placed)
+        for clip_id, chars in self.gender_blocked.items():
+            self.s.warn(f"{clip_id}: on-screen face is {self.face_gender.get(clip_id)}; not replaced with "
+                        f"{', '.join(chars)} (other gender)")
         log.info("video: %d clips cached, %d to produce (%d character replacements)", len(done), len(jobs),
                  sum(j.strategy == "animate_replace" for j in jobs))
         videos = {**done, **self.produce_videos(jobs)}

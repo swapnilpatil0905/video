@@ -8,6 +8,7 @@ import numpy as np
 
 from ..core.errors import StageFailure
 from ..orchestration.runner import StageContext, executor
+from ..storytelling.gender import mentions_other_gender, norm_gender
 from .analysis import character_centroids
 
 MAX_ATTEMPTS = 3
@@ -24,6 +25,7 @@ def identity_embeddings(s: StageContext, images: dict[str, Path], *, with_ratio:
     }, workdir=s.workdir / "identity")
     if full:
         return {k: {"embedding": result["embeddings"].get(k), "face_ratio": result.get("face_ratio", {}).get(k, 0.0),
+                    "gender": (result.get("gender") or {}).get(k),
                     "det_score": result.get("det_score", {}).get(k, 1.0), "face_count": result.get("face_count", {}).get(k),
                     "all_faces": result.get("all_faces", {}).get(k)}
                 for k in images}
@@ -263,9 +265,11 @@ def voice_design(s: StageContext) -> None:
             continue
         char = m.get("character_id")
         design = designs.get(char or "")
-        gender = (design or {}).get("gender") or profiles.get(char or "", {}).get("gender")
-        description = (design or {}).get("voice_description") or spec.default_description.format(
-            gender=gender if gender in ("male", "female") else ("male" if n % 2 else "female"))
+        gender = norm_gender((identity.get(char or "") or {}).get("gender") or (design or {}).get("gender")
+                             or profiles.get(char or "", {}).get("gender"))
+        description = (design or {}).get("voice_description")
+        if not description or mentions_other_gender(description, gender):  # the voice must match the character
+            description = spec.default_description.format(gender=gender or "person")
         who = identity.get(char or "")
         if who and accent_on:  # regional accent + speaking style in the designed voice (Indic Parler-TTS)
             style = who["language_profile"].get("speaking_style", "")

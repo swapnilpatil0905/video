@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .gender import RULE as GENDER_RULE
+
 STYLE_RULES = {
     "natural_hindi": "Everyday spoken Hindi as people really talk; English words only where Indians naturally use them.",
     "natural_hinglish": "Natural urban Hinglish: Hindi sentences with English words/phrases where a real person would "
@@ -65,7 +67,7 @@ class IndianDialogueRewriter:
             f"THIS listener in THIS situation. Register: {self.register}. {STYLE_RULES.get(self.style, '')} "
             f"{self.conversation.RULES} Use each character's speaking profile: a high dialect intensity means "
             "regional expressions come naturally to them; a low one means almost none. Never put slang in every line. "
-            f"Use the given Indian names and forms of address exactly. {self.originality_rule} "
+            f"Use the given Indian names and forms of address exactly. {GENDER_RULE} {self.originality_rule} "
             f"Write {self.target} in Devanagari (English words in Devanagari too, as Indians spell them) so a "
             "text-to-speech voice reads it correctly. Answer in JSON only."
         )
@@ -84,7 +86,7 @@ class IndianDialogueRewriter:
             f"real-world roads/stations/businesses.\nCharacters in this scene:\n{characters}\n"
             f"Regional expressions you MAY use where they fit the character and moment:\n{expressions}\n"
             + (f"Lines just before (already written):\n" + "\n".join(previous_lines[-4:]) + "\n" if previous_lines else "")
-            + "\nLines to write (id | speaker → listener | seconds available | syllables target/max | intention | "
+            + "\nLines to write (id | speaker (gender) → listener (gender) | seconds available | syllables target/max | intention | "
             "emotion | original text):\n" + "\n".join(lines)
             + (f"\n\nReviewer feedback to fix (rewrite these lines accordingly):\n{feedback}" if feedback else "")
             + "\n\nEach line must fit its syllable budget (the max is a hard limit). Return JSON: {\"lines\": [{"

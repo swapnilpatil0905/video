@@ -231,7 +231,7 @@ stages:
     milestone: M3
 
   - name: localization
-    version: "4"
+    version: "5"
     description: Indian screenplay adaptation per analysed scene, audio direction per line, quality review + rewrites.
     depends_on: [scene_analysis, character_identity, character_design, alignment, emotion, speaker_mapping]
     runtime: llm-gpu
@@ -286,7 +286,7 @@ stages:
   - name: full_production
     version: "1"
     description: Full-length production. Requires an approved sample; reuses all sample items.
-    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, effects_separation, localization, character_database, active_speaker, ingest]
+    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, effects_separation, localization, character_database, active_speaker, ingest, character_identity]
     runtime: generation-gpu
     params_from: [production, rights, video, audio]
     model_from: [production.tts.model, production.video.model, production.lipsync.model]

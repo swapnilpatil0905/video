@@ -150,7 +150,7 @@ def identity(request: dict) -> dict:
     import cv2
 
     app = _insightface(request.get("det_size", 640))
-    out, ratio, score, count, all_faces = {}, {}, {}, {}, {}
+    out, ratio, score, count, all_faces, gender = {}, {}, {}, {}, {}, {}
     for item in request["images"]:
         image = cv2.imread(item["path"])
         faces = app.get(image) if image is not None else []
@@ -163,7 +163,9 @@ def identity(request: dict) -> dict:
         out[item["id"]] = face.normed_embedding.astype("float32").tolist() if face is not None else None
         ratio[item["id"]] = float((face.bbox[3] - face.bbox[1]) / image.shape[0]) if face is not None else 0.0
         score[item["id"]] = float(face.det_score) if face is not None else 0.0
-    return {"embeddings": out, "face_ratio": ratio, "det_score": score, "face_count": count, "all_faces": all_faces}
+        gender[item["id"]] = getattr(face, "sex", None) if face is not None else None  # "M" / "F" (genderage model)
+    return {"embeddings": out, "face_ratio": ratio, "det_score": score, "face_count": count, "all_faces": all_faces,
+            "gender": gender}
 
 
 def run(request: dict) -> dict:

@@ -603,7 +603,7 @@ class CharacterImageSpec(StrictModel):
 
 class VoiceDesignSpec(StrictModel):
     model: str = "indic-parler-tts"
-    reference_text: str = "नमस्ते, मैं आज आपसे कुछ ज़रूरी बात करना चाहता हूँ। कृपया ध्यान से सुनिए।"
+    reference_text: str = "नमस्ते, आज मुझे आपसे कुछ ज़रूरी बात करनी है। कृपया ध्यान से सुनिए।"  # gender-neutral
     default_description: str = (
         "A {gender} speaker with a clear, natural voice speaks at a moderate pace. "
         "The recording is very clear and close-sounding with no background noise."

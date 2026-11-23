@@ -1,7 +1,7 @@
 """ScreenplayQualityEvaluator: deterministic checks + two model reviews, scored 0–100 per category.
 
 Line checks (no model): missing, timing, names, slang density, geography, originality, repetition,
-script. Naturalness review (Indic model): natural/regional scores, literal-translation and slang
+script, grammatical gender. Naturalness review (Indic model): natural/regional scores, literal-translation and slang
 flags, an improved line. Screenplay review (scene model): the 14 category scores and per-line
 issues with a rewrite. Lines that fail are rewritten (bounded rounds) and every version is kept.
 """
@@ -12,13 +12,16 @@ import re
 from collections import Counter
 from typing import Any
 
+from .gender import RULE as GENDER_RULE
+from .gender import agreement_issues
+
 CATEGORIES = ("naturalness", "regional_authenticity", "name_usage", "voice_consistency", "emotional_accuracy",
               "cultural_accuracy", "scene_continuity", "story_coherence", "dialogue_duration",
               "lipsync_compatibility", "humour_appropriateness", "emotional_impact", "repetition",
               "translation_completeness")
 FLAGS = ("literal_translation", "unnatural_hinglish", "excessive_slang", "inconsistent_accent", "inappropriate_humour",
          "weak_emotion", "incorrect_name", "cultural_inconsistency", "too_long", "missing_translation", "geography",
-         "originality", "robotic")
+         "originality", "robotic", "wrong_gender")
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 _LATIN = re.compile(r"[A-Za-z]")
 
@@ -71,6 +74,8 @@ class ScreenplayQualityEvaluator:
         if plan is not None:
             for detail in self.environment.check_line(text + " " + (line.get("roman_text") or ""), plan):
                 issues.append({"flag": "geography", "detail": detail})
+        for detail in agreement_issues(text, line.get("speaker_gender"), line.get("listener_gender")):
+            issues.append({"flag": "wrong_gender", "detail": detail})
         for detail in self.references.originality_issues(text, line.get("roman_text") or ""):
             issues.append({"flag": "originality", "detail": detail})
         return issues
@@ -91,6 +96,7 @@ class ScreenplayQualityEvaluator:
             "translation_completeness": int(100 * (1 - flags["missing_translation"] / n)),
             "dialogue_duration": int(100 * (1 - flags["too_long"] / n)),
             "name_usage": int(100 * (1 - flags["incorrect_name"] / n)),
+            "gender_agreement": int(100 * (1 - flags["wrong_gender"] / n)),
             "repetition": max(0, 100 - 25 * flags["repetition"]),
             **({"lipsync_compatibility": max(0, lipsync)} if lipsync is not None else {}),
         }
@@ -101,11 +107,12 @@ class ScreenplayQualityEvaluator:
         return (f"You are a native {target} dialogue editor{' from ' + region if region else ''}. You judge whether "
                 "film dialogue sounds like real people talking, and fix it when it does not. Be strict about literal "
                 "translations, textbook phrasing, forced slang and unnatural Hinglish. Keep the meaning, the speaker's "
-                "speaking profile, the names and the length. Answer in JSON only.")
+                "speaking profile, the names and the length. " + GENDER_RULE + " Flag wrong_gender when a form does not "
+                "match. Answer in JSON only.")
 
     def naturalness_prompt(self, pid: str, rows: list[str], scene_note: str) -> dict[str, str]:
         return {"id": pid, "system": "", "user": (
-            f"{scene_note}\nLines (id | speaker profile | seconds | mood | original | current line):\n" + "\n".join(rows)
+            f"{scene_note}\nLines (id | speaker (gender) → listener (gender): speaker profile | seconds | mood | original | current line):\n" + "\n".join(rows)
             + "\n\nReturn JSON: {\"lines\": [{\"id\": str, \"natural\": 0-100, \"regional\": 0-100 (fits the speaker's "
             'regional profile), "flags": [any of ' + ", ".join(FLAGS) + '], "improved": str|null (better line in '
             'Devanagari, only if it needs fixing), "improved_roman": str|null}]} with every id exactly once.'
@@ -114,13 +121,13 @@ class ScreenplayQualityEvaluator:
     def screenplay_system(self, target: str) -> str:
         return (f"You are a senior script editor reviewing an Indian {target} adaptation of a foreign drama. You score "
                 "the scene honestly and point to the exact lines that need work, with a better version. "
-                "Answer in JSON only.")
+                + GENDER_RULE + " Answer in JSON only.")
 
     def screenplay_prompt(self, scene: dict, rows: list[str], characters: str, technique: str) -> dict[str, str]:
         return {"id": scene["scene_id"], "system": "", "user": (
             f"Scene {scene['scene_id']}: {scene.get('summary', '')} (mood {scene.get('mood')}, intensity "
             f"{scene.get('intensity', 0.5):.1f})\nCharacters:\n{characters}\n{technique}\n"
-            "Lines (id | speaker | seconds | original meaning | adapted line | direction):\n" + "\n".join(rows)
+            "Lines (id | speaker (gender) → listener (gender) | seconds | original meaning | adapted line | direction):\n" + "\n".join(rows)
             + "\n\nScore 0-100: " + ", ".join(CATEGORIES) + ". Return JSON: {\"scores\": {category: int}, "
             '"issues": [{"id": line id, "flag": one of ' + ", ".join(FLAGS) + ', "detail": str, "rewrite": str '
             '(fixed line in Devanagari, same meaning, fits the seconds), "rewrite_roman": str}], "summary": str}'
@@ -155,7 +162,7 @@ class ScreenplayQualityEvaluator:
 
     def line_needs_rewrite(self, line: dict[str, Any]) -> bool:
         hard = {"missing_translation", "too_long", "incorrect_name", "geography", "originality", "excessive_slang",
-                "literal_translation", "unnatural_hinglish", "inappropriate_humour"}
+                "literal_translation", "unnatural_hinglish", "inappropriate_humour", "wrong_gender"}
         if any(i["flag"] in hard for i in line.get("issues", [])):
             return True
         review = line.get("review") or {}

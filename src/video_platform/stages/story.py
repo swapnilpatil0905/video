@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Any
 
 from ..orchestration.runner import StageContext, executor
+from ..storytelling.gender import mentions_other_gender, norm_gender
 from .analysis import load_segments
 
 LANGUAGE_NAMES = {
@@ -146,9 +147,17 @@ def character_design(s: StageContext) -> None:
     designs = []
     for n, p in enumerate(to_design, 1):
         d = as_dict(results.get(p["character_id"]))
-        gender = d.get("gender") or p.get("gender") or "person"
+        source_gender = norm_gender(p.get("gender"))  # measured on the source faces: it wins over the design answer
+        gender = source_gender or norm_gender(d.get("gender")) or d.get("gender") or "person"
         if not d:
             s.warn(f"design for {p['character_id']} failed; using a neutral fallback description")
+        elif source_gender and norm_gender(d.get("gender")) not in (None, source_gender):
+            s.warn(f"design for {p['character_id']} changed the gender ({d.get('gender')}); kept {source_gender}")
+            d = {k: v for k, v in d.items() if k not in ("image_prompt", "voice_description")}
+        for key in ("image_prompt", "voice_description"):
+            if mentions_other_gender(str(d.get(key) or ""), gender):
+                s.warn(f"design for {p['character_id']}: {key} describes the other gender; replaced")
+                d.pop(key, None)
         designs.append({
             "gen_character_id": "GEN_" + p["character_id"].removeprefix("SRC_"),
             "source_character_id": p["character_id"], "tier": p["tier"],

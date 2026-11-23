@@ -18,6 +18,7 @@ from ..storytelling import (
     RegionalEnvironmentAdapter, RegionalLanguageProfileManager, ScreenplayEnhancementEngine,
     ScreenplayQualityEvaluator,
 )
+from ..storytelling.gender import short as gender_short
 from ..storytelling.name_map import SourceNameMap
 from ..storytelling.names import name_distance
 from .analysis import load_segments
@@ -263,6 +264,19 @@ def localization(s: StageContext) -> None:
     def name_of(cid: str | None, sid: str) -> str:
         return registry[cid]["display_name"] if cid in registry else (segments[sid].get("speaker_id") or "someone")
 
+    def gender_of(cid: str | None) -> str | None:
+        return registry[cid].get("gender") if cid in registry else None
+
+    def listener_of(sid: str) -> str | None:
+        scene = scene_of.get(sid) or {}
+        return (scene.get("line_context", {}).get(sid) or {}).get("listener")
+
+    def who(sid: str) -> str:  # "Name (F) → Name (M)": the genders decide the Hindi verb forms
+        cid, listener = speaker_of(sid), listener_of(sid)
+        listener_name = registry[listener]["display_name"] if listener in registry else (listener or "?")
+        return (f"{name_of(cid, sid)} ({gender_short(gender_of(cid))}) → {listener_name}"
+                f" ({gender_short(gender_of(listener))})")
+
     def with_names(characters: str, sids: list[str]) -> str:
         note = name_map.note([segments[x]["text"] for x in sids])
         return f"{characters}\n{note}" if note else characters
@@ -281,12 +295,9 @@ def localization(s: StageContext) -> None:
 
             def row(sid: str) -> str:
                 seg, ctx = segments[sid], context.get(sid, {})
-                cid = speaker_of(sid)
-                listener = ctx.get("listener")
-                listener_name = registry[listener]["display_name"] if listener in registry else (listener or "?")
                 avail = seg["end_s"] - seg["start_s"]
                 b = duration.budget(avail)
-                return (f"{sid} | {name_of(cid, sid)} → {listener_name} | {avail:.1f}s | {b['target']}/{b['max']} | "
+                return (f"{sid} | {who(sid)} | {avail:.1f}s | {b['target']}/{b['max']} | "
                         f"{ctx.get('intention') or ''} | {ctx.get('emotion') or emotions.get(sid, {}).get('emotion', '')} | "
                         f"{name_map.apply(seg['text'])}")
 
@@ -323,6 +334,7 @@ def localization(s: StageContext) -> None:
             "segment_id": sid, "scene_id": scene_of[sid]["scene_id"], "start_s": seg["start_s"], "end_s": seg["end_s"],
             "target_duration_s": round(seg["end_s"] - seg["start_s"], 3), "speaker_id": seg.get("speaker_id"),
             "character_id": cid, "character_name": name_of(cid, sid), "source_text": seg["text"],
+            "speaker_gender": gender_of(cid), "listener_id": listener_of(sid), "listener_gender": gender_of(listener_of(sid)),
             "target_text": writer.clean(x.get("text")), "roman_text": writer.clean(x.get("roman") or old.get("roman_text")),
             "short_text": writer.clean(x.get("short") or old.get("short_text")),
             "meaning_en": writer.clean(x.get("meaning_en") or old.get("meaning_en")),
@@ -377,7 +389,7 @@ def localization(s: StageContext) -> None:
                 for x in part:
                     ln = lines[x]
                     prof = registry.get(ln["character_id"] or "", {}).get("language_profile") or pm.default_character_profile()
-                    rows.append(f"{x} | {ln['character_name']}: {pm.describe_for_prompt(prof)} | {ln['target_duration_s']:.1f}s | "
+                    rows.append(f"{x} | {who(x)}: {pm.describe_for_prompt(prof)} | {ln['target_duration_s']:.1f}s | "
                                 f"{scene['mood']} | {name_map.apply(ln['source_text'])} | {ln['target_text']}")
                 p = evaluator.naturalness_prompt(f"{scene['scene_id']}_{tag}{j}", rows,
                                                  with_names(f"Scene: {scene.get('summary', '')}", part))
@@ -418,7 +430,7 @@ def localization(s: StageContext) -> None:
         system = evaluator.screenplay_system(tgt)
         prompts = []
         for scene in scenes:
-            rows = [f"{x} | {lines[x]['character_name']} | {lines[x]['target_duration_s']:.1f}s | "
+            rows = [f"{x} | {who(x)} | {lines[x]['target_duration_s']:.1f}s | "
                     f"{name_map.apply(lines[x].get('meaning_en') or segments[x]['text'])} | {lines[x]['target_text']} | "
                     f"{lines[x]['direction']['emotion']}/{lines[x]['direction']['delivery']}" for x in scene["segment_ids"]]
             chars = sorted({speaker_of(x) for x in scene["segment_ids"]} - {None})

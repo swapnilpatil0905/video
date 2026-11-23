@@ -127,6 +127,14 @@ def test_quality_line_issues(hyd):
     assert {"excessive_slang", "incorrect_name"} <= flags
     assert ev.line_needs_rewrite({"issues": [{"flag": "too_long"}]})
     assert not ev.line_needs_rewrite({"issues": [], "review": {"natural": 40, "applied": True}})
+    # grammatical gender: a woman speaking with the masculine form must be rewritten
+    female = {"target_text": "मैं घर जा रहा हूँ।", "target_duration_s": 3.0, "direction": {},
+              "speaker_gender": "female", "listener_gender": "male"}
+    issues = ev.line_issues(female, None, None, ["Arjun"])
+    assert "wrong_gender" in {i["flag"] for i in issues}
+    assert ev.line_needs_rewrite({"issues": issues})
+    female["target_text"] = "मैं घर जा रही हूँ।"
+    assert "wrong_gender" not in {i["flag"] for i in ev.line_issues(female, None, None, ["Arjun"])}
 
 
 def test_model_selector_prefers_what_fits():
