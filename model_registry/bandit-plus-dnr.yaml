@@ -1,0 +1,9 @@
+model_id: bandit-plus-dnr
+name: BandIt Plus, cinematic speech / music / effects separation (Divide and Remaster), via Music-Source-Separation-Training
+tasks: [effects_separation]
+status: selected
+repository: https://github.com/ZFTurbo/Music-Source-Separation-Training
+weights: {files: [config_dnr_bandit_bsrnn_multi_mus64.yaml, model_bandit_plus_dnr_sdr_11.47.chpt]}
+licence: {code: MIT, weights: unknown, personal_use: "yes", commercial_use: unknown, notes: "Checkpoint published on the repository's GitHub release v.1.0.3 without a separate licence; BandIt (Watcharasupat et al.) code is Apache-2.0. DnR test SDR speech 15.6 / music 9.2 / effects 9.7", sources: [https://github.com/ZFTurbo/Music-Source-Separation-Training/blob/main/docs/pretrained_models.md]}
+hardware: {runtimes: [cuda, cpu], min_vram_gb: 6}
+known_limitations: [Trained on English DnR mixes; music/effects split is largely language-independent, speech leakage in the effects stem is possible]

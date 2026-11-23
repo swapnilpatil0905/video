@@ -22,7 +22,7 @@ fi
 say()  { echo -e "\033[1;34m==\033[0m $*"; }
 fail() { echo -e "\033[1;31m!!\033[0m $*"; FAILED+=("$1"); }
 FAILED=()
-TARGETS=("$@"); [[ ${#TARGETS[@]} -eq 0 ]] && TARGETS=(system core diar audio llm parler tts image wan latentsync asd sep indicf5 diarizen)
+TARGETS=("$@"); [[ ${#TARGETS[@]} -eq 0 ]] && TARGETS=(system core diar audio llm parler tts image wan latentsync asd sep msst indicf5 diarizen)
 want() { [[ " ${TARGETS[*]} " == *" $1 "* ]]; }
 
 # ---- system packages ----------------------------------------------------------
@@ -230,6 +230,44 @@ if want asd; then
     else say "asd: ready"; fi
 fi
 
+# ---- Music-Source-Separation-Training: BandIt Plus (AI music removal) --------------------------
+MSST_COMMIT=1523206d12a521bdb20673726562524cf0f9635b
+MSST_RELEASE=https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3
+# model build + checkpoint load on the GPU (no audio needed); run from the repository
+MSST_TEST='import sys, torch, argparse; sys.path.insert(0, "."); from utils.settings import get_model_from_config; from utils.model_utils import load_start_checkpoint; m, c = get_model_from_config("bandit", sys.argv[1]); a = argparse.Namespace(start_check_point=sys.argv[2], model_type="bandit", lora_checkpoint_peft="", lora_checkpoint_loralib="", lora_checkpoint=""); load_start_checkpoint(a, m, torch.load(sys.argv[2], map_location="cpu", weights_only=False), type_="inference"); m.to("cuda").eval(); print("BandIt instruments:", list(c.training.instruments))'
+if want msst; then
+    REPO="$RT/repos/Music-Source-Separation-Training"; W="$RT/weights/msst"; PY="$RT/venvs/msst/bin/python"
+    if [[ ! -f "$RT/venvs/msst/.vp_ok" || "$0" -nt "$RT/venvs/msst/.vp_ok" ]]; then
+        say "msst: BandIt Plus music/effects separation (log: $LOGS/setup_msst.log)"
+        {
+            [[ -d "$REPO/.git" ]] || git clone https://github.com/ZFTurbo/Music-Source-Separation-Training.git "$REPO"
+            git -C "$REPO" fetch -q origin "$MSST_COMMIT" 2>/dev/null; git -C "$REPO" checkout -q "$MSST_COMMIT"
+            mkdir -p "$W"
+            for f in config_dnr_bandit_bsrnn_multi_mus64.yaml model_bandit_plus_dnr_sdr_11.47.chpt; do
+                if [[ ! -s "$W/$f" ]]; then curl -fL --retry 3 -o "$W/$f.part" "$MSST_RELEASE/$f" && mv -f "$W/$f.part" "$W/$f"; fi
+            done
+            uv venv --allow-existing --python 3.11 "$RT/venvs/msst"
+            PIN="$RT/venvs/msst/constraints.txt"; printf 'torch==2.8.0\ntorchaudio==2.8.0\n' >"$PIN"
+            uv pip install --python "$PY" -c "$PIN" torch torchaudio
+            # the repository's list includes training/GUI extras (wandb, wxpython, pyaudio …): one at a time, skip failures
+            while IFS= read -r line || [[ -n "$line" ]]; do
+                line="${line%%#*}"; line="${line// /}"
+                [[ -z "$line" || "$line" =~ ^(torch|torchaudio)([<>=~!]|$) || "$line" =~ ^(wxpython|pyaudio|keyboard|sageattention|bitsandbytes|wandb) ]] && continue
+                uv pip install --python "$PY" -c "$PIN" "$line" || echo "!! msst: not installed: $line"
+            done < "$REPO/requirements.txt"
+            for round in 1 2 3 4 5 6 7 8; do  # install whatever the model import still reports missing
+                missing=$( (cd "$REPO" && "$PY" -c "$MSST_TEST" "$W/config_dnr_bandit_bsrnn_multi_mus64.yaml" "$W/model_bandit_plus_dnr_sdr_11.47.chpt") 2>&1 \
+                           | sed -nE "s/.*No module named '([A-Za-z0-9_]+).*/\1/p" | tail -n 1)
+                [[ -z "$missing" ]] && break
+                case "$missing" in yaml) pkg=pyyaml ;; sklearn) pkg=scikit-learn ;; *) pkg="$missing" ;; esac
+                echo "msst: installing missing module $missing ($pkg)"
+                uv pip install --python "$PY" -c "$PIN" "$pkg" || break
+            done
+            (cd "$REPO" && "$PY" -c "$MSST_TEST" "$W/config_dnr_bandit_bsrnn_multi_mus64.yaml" "$W/model_bandit_plus_dnr_sdr_11.47.chpt")
+        } >"$LOGS/setup_msst.log" 2>&1 && touch "$RT/venvs/msst/.vp_ok" || fail msst
+    else say "msst: ready"; fi
+fi
+
 # ---- Real-ESRGAN weights (balanced profile upscaling) ------------------------------
 if want image; then
     ESR="$RT/weights/RealESRGAN_x2plus.pth"
@@ -253,7 +291,7 @@ gpu_fix() {  # name — upgrade only the torch family of a venv whose torch cann
     uv pip install --python "$py" "${pkgs[@]}" >>"$LOGS/setup_$name.log" 2>&1
     "$py" -c "$GPU_TEST" >>"$LOGS/setup_$name.log" 2>&1 || { rm -f "$RT/venvs/$name/.vp_ok"; say "$name: GPU check still fails"; fail "$name"; }
 }
-for env in tts indicf5 parler latentsync wan image audio diar asd sep llm diarizen; do
+for env in tts indicf5 parler latentsync wan image audio diar asd sep msst llm diarizen; do
     want "$env" && gpu_fix "$env"
 done
 if want wan && [[ -f "$RT/venvs/wan/.vp_ok" ]]; then  # animation preprocessing has its own requirements

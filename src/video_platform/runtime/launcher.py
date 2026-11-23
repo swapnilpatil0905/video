@@ -38,6 +38,7 @@ RUNTIME_VENVS = {
     "latentsync": "latentsync",
     "asd": "asd",          # Light-ASD (active speaker detection)
     "sep": "sep",          # audio-separator (BS-RoFormer)
+    "msst": "msst",        # Music-Source-Separation-Training (BandIt Plus: speech / music / effects)
     "indicf5": "indicf5",  # IndicF5 Hindi TTS
     "diarizen": "diarizen",  # DiariZen speaker diarization
 }

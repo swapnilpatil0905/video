@@ -1,6 +1,6 @@
 """v0.5: engine choice, clip-level presence matching, separation output discovery, optional models."""
 
-from video_platform.stages.analysis import find_separation_outputs
+from video_platform.stages.analysis import find_dnr_stems, find_separation_outputs
 from video_platform.stages.production import choose_tts_engine, match_presence
 
 
@@ -23,6 +23,20 @@ def test_find_separation_outputs(tmp_path):
     (tmp_path / "full_48k_(Instrumental)_model_bs_roformer.wav").write_bytes(b"i")
     vocals, rest = find_separation_outputs(tmp_path)
     assert vocals.name.startswith("full_48k_(Vocals)") and rest.name.startswith("full_48k_(Instrumental)")
+
+
+def test_find_dnr_stems(tmp_path):
+    folder = tmp_path / "music_effects"
+    folder.mkdir()
+    for name in ("speech", "music", "effects"):
+        (folder / f"{name}.wav").write_bytes(b"x")
+    stems = find_dnr_stems(tmp_path)
+    assert {k: v.name for k, v in stems.items()} == {"speech": "speech.wav", "music": "music.wav", "effects": "effects.wav"}
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "dialog.wav").write_bytes(b"x")
+    (other / "sfx.wav").write_bytes(b"x")
+    assert set(find_dnr_stems(other)) == {"speech", "effects"}
 
 
 def test_optional_polish_model_can_be_disabled(make_project):

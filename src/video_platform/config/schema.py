@@ -419,6 +419,16 @@ class SeparationParams(StrictModel):
     segment_seconds: float = Field(default=7.0, gt=1, le=7.8)
 
 
+class EffectsSeparationParams(StrictModel):
+    """Second split of the music+effects stem into music / effects, so the bed can drop the music."""
+
+    model: str = "bandit-plus-dnr"
+    model_type: str = Field(default="bandit", description="Music-Source-Separation-Training --model_type")
+    config_file: str = "config_dnr_bandit_bsrnn_multi_mus64.yaml"
+    checkpoint_file: str = "model_bandit_plus_dnr_sdr_11.47.chpt"
+    timeout_minutes: int = Field(default=120, ge=1)
+
+
 class EmotionParams(StrictModel):
     enabled: bool = True
     engine: Literal["emotion2vec", "sensevoice"] = Field(
@@ -473,6 +483,7 @@ class AnalysisSpec(StrictModel):
     alignment: AlignmentParams = Field(default_factory=AlignmentParams)
     speaker_mapping_prior: SpeakerPriorParams = Field(default_factory=SpeakerPriorParams)
     separation: SeparationParams = Field(default_factory=SeparationParams)
+    effects_separation: EffectsSeparationParams = Field(default_factory=EffectsSeparationParams)
     emotion: EmotionParams = Field(default_factory=EmotionParams)
     active_speaker: ActiveSpeakerParams = Field(default_factory=ActiveSpeakerParams)
     speaker_mapping: SpeakerMappingParams = Field(default_factory=SpeakerMappingParams)
@@ -661,6 +672,9 @@ class LipSyncSpec(StrictModel):
 
 
 class MixSpec(StrictModel):
+    bed: Literal["effects", "music_and_effects"] = Field(
+        default="effects", description="effects: source sound effects/ambience with the music removed by AI "
+                                       "(effects_separation); music_and_effects: the whole non-dialogue stem")
     bed_gain_db: float = -4.0
     dialogue_gain_db: float = 0.0
 
@@ -737,7 +751,8 @@ class RuntimeSpec(StrictModel):
     device: str = "cuda"
     venvs: dict[str, str] = Field(default_factory=dict, description="runtime → python path override")
     repos: dict[str, str] = Field(default_factory=lambda: {
-        "wan": "repos/Wan2.2", "latentsync": "repos/LatentSync", "lightasd": "repos/Light-ASD"})
+        "wan": "repos/Wan2.2", "latentsync": "repos/LatentSync", "lightasd": "repos/Light-ASD",
+        "msst": "repos/Music-Source-Separation-Training"})
     weights_dir: str = "weights"
     worker_timeout_minutes: int = Field(default=720, ge=1)
     heartbeat_seconds: int = Field(default=60, ge=0, description="progress line in run.log while a model step runs (0 = off)")

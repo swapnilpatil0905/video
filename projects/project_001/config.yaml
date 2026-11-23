@@ -118,7 +118,7 @@ rights:
   purpose: self_improvement_learning
   distribution: private
   reuse_source_footage: true              # only for shots with no replacement character (private learning use)
-  reuse_source_music_and_effects: false   # no background music: dialogue only (the M&E stem also carries effects)
+  reuse_source_music_and_effects: true    # source sound effects/ambience only: production.mix.bed = effects (AI music removal)
 
 # Analysis with the current best open models (v0.5). These differ from the legacy Mac run, so
 # the analysis is recomputed on the GPU (the legacy import adopts only stages whose settings match).
@@ -164,6 +164,8 @@ notifications:
 production:
   llm:
     model: qwen3-32b                      # fits the 96 GB RTX PRO 6000; use qwen3-14b on GPUs < 80 GB
+  mix:
+    bed: effects                          # background music removed by AI (BandIt Plus); effects + ambience kept
 
 storage:
   provider: local

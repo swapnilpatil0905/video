@@ -227,6 +227,64 @@ def source_separation(s: StageContext) -> None:
     s.provenance["engine"] = f"demucs ({p['demucs_model']})"
 
 
+def find_dnr_stems(folder: Path) -> dict[str, Path]:
+    """Music-Source-Separation-Training writes <store_dir>/<file>/<instrument>.wav; DnR models name the
+    instruments speech/dialog, music and effects/sfx."""
+    stems: dict[str, Path] = {}
+    for path in sorted(folder.rglob("*.wav")):
+        name = path.stem.lower()
+        kind = ("music" if "music" in name else "effects" if ("effect" in name or "sfx" in name)
+                else "speech" if ("speech" in name or "dialog" in name) else None)
+        if kind and kind not in stems:
+            stems[kind] = path
+    return stems
+
+
+def _rms_db(path: Path) -> float:
+    import numpy as np
+    import soundfile as sf
+
+    total, count = 0.0, 0
+    for block in sf.blocks(str(path), blocksize=48000 * 30, dtype="float32", always_2d=True):
+        total += float(np.square(block, dtype="float64").sum())
+        count += block.size
+    return round(10 * np.log10(total / count + 1e-12), 1) if count else -120.0
+
+
+@executor("effects_separation")
+def effects_separation(s: StageContext) -> None:
+    """AI music removal: BandIt Plus (cinematic speech / music / effects) on the music+effects stem.
+    The bed then keeps the source's sound effects and ambience without its background music."""
+    p = s.params
+    stem = s.dep_path("source_separation", "music_effects.wav")
+    in_dir, out_dir = s.workdir / "input", s.workdir / "stems"
+    for folder in (in_dir, out_dir):
+        if folder.exists():
+            shutil.rmtree(folder)
+        folder.mkdir(parents=True)
+    (in_dir / "music_effects.wav").symlink_to(Path(stem).resolve())
+    weights = s.runtime.weights_dir / "msst"
+    config, checkpoint = weights / p["config_file"], weights / p["checkpoint_file"]
+    for f in (config, checkpoint):
+        if not f.exists():
+            raise StageFailure(f"{f} missing. Run: bash scripts/setup_vast.sh msst")
+    s.runtime.run_command("msst", [
+        s.runtime.python("msst"), "inference.py", "--model_type", p["model_type"], "--config_path", str(config),
+        "--start_check_point", str(checkpoint), "--input_folder", str(in_dir), "--store_dir", str(out_dir),
+        "--disable_detailed_pbar",
+    ], cwd=s.runtime.repo("msst"), log_name="bandit_dnr", timeout_minutes=p["timeout_minutes"])
+    stems = find_dnr_stems(out_dir)
+    if "music" not in stems or "effects" not in stems:
+        raise StageFailure(f"BandIt finished but music/effects stems were not found in {out_dir} "
+                           f"(found: {sorted(stems) or 'nothing'})")
+    s.put_file(stems["effects"], "effects.wav")
+    s.put_file(stems["music"], "music.wav")
+    for kind, path in stems.items():  # loudness of each stem: shows how much music was taken out
+        s.metric(f"{kind}_rms_db", _rms_db(path))
+    s.metric("input_rms_db", _rms_db(Path(stem)))
+    s.provenance["engine"] = f"bandit-plus-dnr ({p['checkpoint_file']})"
+
+
 # ---------------------------------------------------------------------------
 # Shots and faces
 # ---------------------------------------------------------------------------

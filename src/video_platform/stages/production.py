@@ -690,7 +690,10 @@ class Producer:
         if not self.s.config.rights.reuse_source_music_and_effects:
             self.s.warn("rights.reuse_source_music_and_effects is false: no music/effects bed (dialogue only)")
             return None
-        source = self.local(self.s.dep_ref("source_separation", "music_effects.wav").uri)
+        if self.prod.mix.bed == "effects":  # AI music removal: effects/ambience only
+            source = self.local(self.s.dep_ref("effects_separation", "effects.wav").uri)
+        else:
+            source = self.local(self.s.dep_ref("source_separation", "music_effects.wav").uri)
         out = self.s.workdir / f"{self.scope}_bed.wav"
         with sf.SoundFile(str(source)) as src:
             rate = src.samplerate

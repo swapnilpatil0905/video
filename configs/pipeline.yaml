@@ -140,6 +140,16 @@ stages:
     outputs: [vocals.wav, music_effects.wav]
     milestone: M2
 
+  - name: effects_separation
+    version: "1"
+    description: AI music removal - split the music+effects stem into music / effects (BandIt Plus, cinematic DnR).
+    depends_on: [source_separation]
+    runtime: audio-gpu
+    params_from: analysis.effects_separation
+    model_from: [analysis.effects_separation.model]
+    outputs: [effects.wav, music.wav]
+    milestone: M2
+
   - name: emotion
     version: "1"
     description: Per-segment speech emotion and audio events (SenseVoice).
@@ -266,7 +276,7 @@ stages:
   - name: sample_production
     version: "1"
     description: TTS, shot generation, lip-sync, mix, assembly and QA for the trailer.
-    depends_on: [sample_selection, character_references, voice_design, source_separation, localization, character_database, shot_detection, active_speaker, ingest, character_identity, scene_analysis]
+    depends_on: [sample_selection, character_references, voice_design, source_separation, effects_separation, localization, character_database, shot_detection, active_speaker, ingest, character_identity, scene_analysis]
     runtime: generation-gpu
     params_from: [production, sample, rights, video, audio]
     model_from: [production.tts.model, production.video.model, production.lipsync.model]
@@ -276,7 +286,7 @@ stages:
   - name: full_production
     version: "1"
     description: Full-length production. Requires an approved sample; reuses all sample items.
-    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, localization, character_database, active_speaker, ingest]
+    depends_on: [sample_production, shot_detection, character_references, voice_design, source_separation, effects_separation, localization, character_database, active_speaker, ingest]
     runtime: generation-gpu
     params_from: [production, rights, video, audio]
     model_from: [production.tts.model, production.video.model, production.lipsync.model]
@@ -284,7 +294,7 @@ stages:
     milestone: M6
 
 modes:
-  analyze: [speaker_mapping, character_profile, emotion, source_separation]
+  analyze: [speaker_mapping, character_profile, emotion, source_separation, effects_separation]
   sample: [sample_production]
   analyze-and-sample: [sample_production]
   full: [full_production]
